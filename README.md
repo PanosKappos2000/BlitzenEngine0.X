@@ -5,7 +5,7 @@ but it is now an executable instead of a static library. The idea is that if a g
 This version focuses on putting most of the rendering work over to the GPU, starting off with meshes and then making textures and materials bindless.
 The bindless edition of the 0.Alpha throws all scene vertices and indices into a unified buffer, which is a good start. Now the renderer should call the indirect versions of the drawing functions, to draw everything with one call.
 The plan is to also use compute shaders to ready the indirect commands and do frustrum culling. Once all this is done, hopefully we can start loading textures in a similar bindless approach.
-This will free up the GPU to hopefully do some physics calculations in future version that add physics.
+This will free up the GPU to hopefully do some physics calculations in future versions that add physics.
 
 
 
