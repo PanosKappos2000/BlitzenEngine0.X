@@ -9,7 +9,7 @@ This will free up the GPU to hopefully do some physics calculations in future ve
 
 
 
-If someone tries to test their project on their machine (unlikely that anyone will ever see this), it might not work. I have tested this on other machines and it failed to build on an ubuntu desktop and failed to compile
+If someone tries to test this project on their machine (unlikely that anyone will ever see this), it might not work. I have tested this on other machines and it failed to build on an ubuntu desktop and failed to compile
 on a windows laptop that used gcc instead of Msvc. It did succeed on a windows laptop that used Msvc and created a visual studio solution with cmake. The code compiled and the scene rendered normally (0.Alpha version).
 If someone ever wants to try for whatever reason, running cmake should be enough. Then the scene that is loaded can be changed by going to the Init function of the VulkanRenderer class and changing the filepath in the LoadScene call.
 It should be a .gltf or .glb file and if it does not require some extensions that the gltf loading library I use does not support, it should render normally and the user can move the camera with mouse and WASD keys
