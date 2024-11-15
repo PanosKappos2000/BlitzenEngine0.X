@@ -11,11 +11,13 @@ This will free up the GPU to hopefully do some physics calculations in future ve
 
 If someone tries to test their project on their machine (unlikely that anyone will ever see this), it might not work. I have tested this on other machines and it failed to build on an ubuntu desktop and failed to compile
 on a windows laptop that used gcc instead of Msvc. It did succeed on a windows laptop that used Msvc and created a visual studio solution with cmake. The code compiled and the scene rendered normally (0.Alpha version).
-If someone ever wants to try for whatever reason. Running cmake should be enough. Then the scene that is loaded can be changed by going to the Init function of the VulkanRenderer class and changing the filepath in the LoadScene call.
+If someone ever wants to try for whatever reason, running cmake should be enough. Then the scene that is loaded can be changed by going to the Init function of the VulkanRenderer class and changing the filepath in the LoadScene call.
 It should be a .gltf or .glb file and if it does not require some extensions that the gltf loading library I use does not support, it should render normally and the user can move the camera with mouse and WASD keys
 
 It's also important to note that this version has textures, materials and colors stripped from the shaders and the draw loop (it still loads them but they're never used). A more "complete" version would be the 0.Alpha which renders 
 the scenes with textures and has actually been tested on a different machine. If one uses that version, to load different scenes, they would have to change the filepath in mainEngine.cpp on the LoadScene function called from Init(().
 BlitzenEngine0.Alpha is hosted on the repository of the same name on my account.
+
+Currently, I have no plans on fixing this issue as this project serves more as a way to understand 3D graphics programming. If it becomes a worthwhile application in the far future, I will see what I can do about its portability issues.
 
 The fastgltf library I use is this one https://github.com/spnda/fastgltf (I use an older version than the current)
