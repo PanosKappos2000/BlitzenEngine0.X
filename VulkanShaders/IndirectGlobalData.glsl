@@ -1,4 +1,3 @@
-
 layout(set = 0, binding = 0) uniform SceneData
 {
     vec4 sunlightColor;
@@ -9,5 +8,6 @@ layout(set = 0, binding = 0) uniform SceneData
     mat4 projectionViewMatrix;
     //The scene data will be used to pass the vertex buffer address, this will probably need to be changed later
     VertexBuffer vertexBuffer;
-    //IndirectDataBuffer indirectDataBuffer;
+    //The scene data will be used to pass the indirect buffer address, this will probably need to be changed later
+    IndirectDataBuffer indirectDataBuffer;
 }sceneData;

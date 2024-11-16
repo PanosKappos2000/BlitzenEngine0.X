@@ -32,35 +32,19 @@ namespace BlitzenVulkan
 
         InitMainMaterialData();
 
-        std::vector<Vertex> rect_vertices{4};
-
-	    rect_vertices[0].position = {0.5,-0.5, 0};
-	    rect_vertices[1].position = {0.5,0.5, 0};
-	    rect_vertices[2].position = {-0.5,-0.5, 0};
-	    rect_vertices[3].position = {-0.5,0.5, 0};
-
-	    rect_vertices[0].color = {0,0, 0,1};
-	    rect_vertices[1].color = { 0.5,0.5,0.5 ,1};
-	    rect_vertices[2].color = { 1,0, 0,1 };
-	    rect_vertices[3].color = { 0,1, 0,1 };
-
-	    std::vector<uint32_t> rect_indices;
-        rect_indices.resize(6);
-
-	    rect_indices[0] = 0;
-	    rect_indices[1] = 1;
-	    rect_indices[2] = 2;
-
-	    rect_indices[3] = 2;
-	    rect_indices[4] = 1;
-	    rect_indices[5] = 3;
-
+        //Temporarily holds all vertices and indices, once every scene and asset is loaded, it will all be uploaded in tounified buffer
+        std::vector<Vertex> vertices;
+        std::vector<uint32_t> indices;
         std::string testScene = "Assets/structure.glb";
-        LoadScene(testScene, "structure", rect_vertices, rect_indices);
-
-        UploadMeshBuffersToGPU(rect_vertices, rect_indices);
-
+        LoadScene(testScene, "structure", vertices, indices);
+        //Update every node in the scene to be included in the draw context
         m_scenes["structure"].AddToDrawContext(glm::mat4(1.f), m_mainDrawContext);
+        //Upload vertices and indices for all object to m_globalIndexAndVertexBuffer
+        UploadMeshBuffersToGPU(vertices, indices);
+        //Upload indirect draw commands and other draw indirect data to m_drawIndirectDataBuffer
+        #if BLITZEN_START_VULKAN_WITH_INDIRECT
+            UploadIndirectDrawBuffersToGPU(m_mainDrawContext.indirectData);
+        #endif
     }
 
     void VulkanRenderer::glfwWindowInit()
@@ -108,11 +92,20 @@ namespace BlitzenVulkan
         vulkan12Features.bufferDeviceAddress = true;
         vulkan12Features.descriptorIndexing = true;
 
+        VkPhysicalDeviceVulkan11Features vulkan11Features{};
+        vulkan11Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
+        vulkan11Features.shaderDrawParameters = true;
+
+        VkPhysicalDeviceFeatures vulkanFeatures{};
+        vulkanFeatures.multiDrawIndirect = true;
+
         //vkbDeviceSelector built with reference to vkbInstance built earlier
         vkb::PhysicalDeviceSelector vkbDeviceSelector{ vkbInstance };
         vkbDeviceSelector.set_minimum_version(1, 3);
         vkbDeviceSelector.set_required_features_13(vulkan13Features);
         vkbDeviceSelector.set_required_features_12(vulkan12Features);
+        vkbDeviceSelector.set_required_features_11(vulkan11Features);
+        vkbDeviceSelector.set_required_features(vulkanFeatures);
         vkbDeviceSelector.set_surface(m_bootstrapObjects.surface);
 
         //Selecting the GPU and giving its value to the vkb::PhysicalDevice handle
@@ -634,6 +627,29 @@ namespace BlitzenVulkan
         1, &pushConstants);
 
         opaquePipelineBuilder.Build();
+
+        //Since indirect draw will have to use a different shader, a new pipeline needs to be created for it
+        #if BLITZEN_START_VULKAN_WITH_INDIRECT
+            opaquePipelineBuilder.m_pGraphicsPipeline = &(m_mainMaterialData.indirectDrawOpaqueGraphicsPipeline);
+            opaquePipelineBuilder.m_pLayout = &(m_mainMaterialData.globalIndirectDrawPipelineLayout);
+
+            opaquePipelineBuilder.CreateShaderStage("VulkanShaders/IndirectDrawShader.vert.spv", VK_SHADER_STAGE_VERTEX_BIT, "main");
+            opaquePipelineBuilder.CreateShaderStage("VulkanShaders/MainGeometryShader.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT, "main");
+            opaquePipelineBuilder.SetTriangleListInputAssembly();
+            opaquePipelineBuilder.SetDynamicViewport();
+            opaquePipelineBuilder.SetPolygonMode(VK_POLYGON_MODE_FILL);
+            opaquePipelineBuilder.SetPrimitiveCulling(VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE);
+            opaquePipelineBuilder.DisableDepthBias();
+            opaquePipelineBuilder.DisableDepthClamp();
+            opaquePipelineBuilder.DisableMultisampling();
+            opaquePipelineBuilder.EnableDefaultDepthTest();
+            opaquePipelineBuilder.DisableColorBlending();
+
+            //The pipeline layout for indirect only uses the scene data descriptor set, to pass the scene data at the start of draw frame
+            opaquePipelineBuilder.CreatePipelineLayout(1, &m_globalSceneDescriptorSetLayout, 0, nullptr);
+
+            opaquePipelineBuilder.Build();
+        #endif
     }
 
     void VulkanRenderer::UploadMeshBuffersToGPU(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices)
@@ -695,6 +711,45 @@ namespace BlitzenVulkan
         indexBufferCopy.pRegions = &indexBufferCopyRegion;
 
         vkCmdCopyBuffer2(m_commands.commandBuffer, &indexBufferCopy);
+
+        SubmitCommands();
+
+        vmaDestroyBuffer(m_allocator, stagingBuffer.buffer, stagingBuffer.allocation);
+    }
+
+    void VulkanRenderer::UploadIndirectDrawBuffersToGPU(std::vector<DrawIndirectData>& dataToUpload)
+    {
+        //Allocate the buffer that will hold the indirect commands and the data needed for the objects
+        VkDeviceSize bufferSize = sizeof(DrawIndirectData) * dataToUpload.size();
+        AllocateBuffer(m_drawIndirectDataBuffer, bufferSize, VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | 
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
+        //Store the device address of the indirect buffer, so that any data passed along with it can be accessed in the shader
+        VkBufferDeviceAddressInfo allocatedBufferAddressInfo{};
+        allocatedBufferAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+        allocatedBufferAddressInfo.buffer = m_drawIndirectDataBuffer.buffer;
+        m_globalSceneData.indirectBufferAddress = vkGetBufferDeviceAddress(m_device, &allocatedBufferAddressInfo);
+
+        //Put the data on a staging buffer, to use it to transfer the data to the GPU buffer
+        AllocatedBuffer stagingBuffer;
+        AllocateBuffer(stagingBuffer, bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+        void* drawIndirectDataHolder = stagingBuffer.allocation->GetMappedData(); 
+        memcpy(drawIndirectDataHolder, dataToUpload.data(), bufferSize);
+
+        StartRecordingCommands();
+
+        VkBufferCopy2 copyBufferRegion{};
+        copyBufferRegion.sType = VK_STRUCTURE_TYPE_BUFFER_COPY_2;
+        copyBufferRegion.dstOffset = 0;
+        copyBufferRegion.srcOffset = 0;
+        copyBufferRegion.size = bufferSize;
+
+        VkCopyBufferInfo2 copyBufferInfo{};
+        copyBufferInfo.sType = VK_STRUCTURE_TYPE_COPY_BUFFER_INFO_2;
+        copyBufferInfo.dstBuffer = m_drawIndirectDataBuffer.buffer;
+        copyBufferInfo.srcBuffer = stagingBuffer.buffer;
+        copyBufferInfo.regionCount = 1;
+        copyBufferInfo.pRegions = &copyBufferRegion;
+        vkCmdCopyBuffer2(m_commands.commandBuffer, &copyBufferInfo);
 
         SubmitCommands();
 
@@ -873,7 +928,7 @@ namespace BlitzenVulkan
             }
 
             //Puts a new vulkan sampler object at the back of the array in the gltf scene and initializes it with vkCreateSampler
-            scene.m_samplers.push_back(VkSampler());
+            scene.m_samplers.emplace_back(VkSampler());
             vkCreateSampler(m_device, &vulkanSamplerInfo, nullptr, &(scene.m_samplers.back()));
         }
 
@@ -1120,7 +1175,7 @@ namespace BlitzenVulkan
         }
 
         //Iterates through them once more to find the no-parent nodes and update the transform of their children
-        for(auto& node : nodes)
+        for(Node* node : nodes)
         {
             if(!(node->pParent))
             {
@@ -1144,7 +1199,7 @@ namespace BlitzenVulkan
                     assert(filePath.fileByteOffset == 0); 
                     assert(filePath.uri.isLocalPath());                                                         
                     const std::string path(filePath.uri.path().begin(),
-                        filePath.uri.path().end()); // Thanks C++.
+                        filePath.uri.path().end()); 
                     unsigned char* data = stbi_load(path.c_str(), &width, &height, &nrChannels, 4);
                     if (data) {
                         VkExtent3D imagesize;
@@ -1331,14 +1386,32 @@ namespace BlitzenVulkan
 
         vkCmdBeginRendering(m_frameTools[m_currentFrame].graphicsCommandBuffer, &mainRenderingInfo);
 
-        //Bind the pipeline, index buffer and descriptor that are global for objects for now(index buffer must stay global at least)
-        vkCmdBindPipeline(m_frameTools[m_currentFrame].graphicsCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, 
-        m_mainMaterialData.opaquePipeline.graphicsPipeline);
+        //Bind the index buffer, it's the same for both the indirect and traditional version of the pipeline
         vkCmdBindIndexBuffer(m_frameTools[m_currentFrame].graphicsCommandBuffer, m_globalIndexAndVertexBuffer.indexBuffer.buffer, 
         0, VK_INDEX_TYPE_UINT32);
-        vkCmdBindDescriptorSets(m_frameTools[m_currentFrame].graphicsCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, 
-        m_mainMaterialData.opaquePipeline.pipelineLayout, 0, 1, &sceneDataDescriptorSet, 0, nullptr);
-
+        #if BLITZEN_START_VULKAN_WITH_INDIRECT
+            //Bind the pipeline and the global descriptor set for the indirect pipeline if it is active
+            if(stats.drawIndirectMode)
+            {
+                vkCmdBindPipeline(m_frameTools[m_currentFrame].graphicsCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, 
+                m_mainMaterialData.indirectDrawOpaqueGraphicsPipeline);
+                vkCmdBindDescriptorSets(m_frameTools[m_currentFrame].graphicsCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, 
+                m_mainMaterialData.globalIndirectDrawPipelineLayout, 0, 1, &sceneDataDescriptorSet, 0, nullptr);
+            }
+            //Bind the pipeline and the global descriptor set for the traditional pipeline, if indirect is inactive
+            else
+            {
+                vkCmdBindPipeline(m_frameTools[m_currentFrame].graphicsCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, 
+                m_mainMaterialData.opaquePipeline.graphicsPipeline);
+                vkCmdBindDescriptorSets(m_frameTools[m_currentFrame].graphicsCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, 
+                m_mainMaterialData.opaquePipeline.pipelineLayout, 0, 1, &sceneDataDescriptorSet, 0, nullptr);
+            }
+        #else
+            vkCmdBindPipeline(m_frameTools[m_currentFrame].graphicsCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+            m_mainMaterialData.opaquePipeline.graphicsPipeline);
+            vkCmdBindDescriptorSets(m_frameTools[m_currentFrame].graphicsCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+            m_mainMaterialData.opaquePipeline.pipelineLayout, 0, 1, &sceneDataDescriptorSet, 0, nullptr);
+        #endif
         //Since viewport and scissor were specified in the dynamic state, they now need to be set
         VkViewport viewport{};
         viewport.x = 0;
@@ -1355,18 +1428,40 @@ namespace BlitzenVulkan
         scissor.offset.y = 0;
         vkCmdSetScissor(m_frameTools[m_currentFrame].graphicsCommandBuffer, 0, 1, &scissor);
 
-        for(size_t i = 0; i < m_mainDrawContext.opaqueRenderObjects.size(); ++i)
-        {
-            //The model/surface that is currently being worked on
-            RenderObject& opaque = m_mainDrawContext.opaqueRenderObjects[i];
+        #if BLITZEN_START_VULKAN_WITH_INDIRECT
+            if(stats.drawIndirectMode)
+            {
+                vkCmdDrawIndexedIndirect(m_frameTools[m_currentFrame].graphicsCommandBuffer, m_drawIndirectDataBuffer.buffer, 
+                offsetof(DrawIndirectData, indirectDraws), static_cast<uint32_t>(m_mainDrawContext.indirectData.size()), sizeof(DrawIndirectData));
+            }
+            //Go with the traditional method if draw indirect is inactive
+            else
+            {
+                for(size_t i = 0; i < m_mainDrawContext.opaqueRenderObjects.size(); ++i)
+                {
+                    //The model/surface that is currently being worked on
+                    RenderObject& opaque = m_mainDrawContext.opaqueRenderObjects[i];
 
-            ModelMatrixPushConstant pushConstant;
-            pushConstant.modelMatrix = opaque.modelMatrix;
-            vkCmdPushConstants(m_frameTools[m_currentFrame].graphicsCommandBuffer, opaque.pMaterial->pPipeline->pipelineLayout, 
-            VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(ModelMatrixPushConstant), &pushConstant);
-            vkCmdDrawIndexed(m_frameTools[m_currentFrame].graphicsCommandBuffer, opaque.indexCount, 1, opaque.firstIndex, 0, 0);
-        }
+                    ModelMatrixPushConstant pushConstant;
+                    pushConstant.modelMatrix = opaque.modelMatrix;
+                    vkCmdPushConstants(m_frameTools[m_currentFrame].graphicsCommandBuffer, opaque.pMaterial->pPipeline->pipelineLayout, 
+                    VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(ModelMatrixPushConstant), &pushConstant);
+                    vkCmdDrawIndexed(m_frameTools[m_currentFrame].graphicsCommandBuffer, opaque.indexCount, 1, opaque.firstIndex, 0, 0);
+                }
+            }
+        #else
+            for (size_t i = 0; i < m_mainDrawContext.opaqueRenderObjects.size(); ++i)
+            {
+                //The model/surface that is currently being worked on
+                RenderObject& opaque = m_mainDrawContext.opaqueRenderObjects[i];
 
+                ModelMatrixPushConstant pushConstant;
+                pushConstant.modelMatrix = opaque.modelMatrix;
+                vkCmdPushConstants(m_frameTools[m_currentFrame].graphicsCommandBuffer, opaque.pMaterial->pPipeline->pipelineLayout,
+                    VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(ModelMatrixPushConstant), &pushConstant);
+                vkCmdDrawIndexed(m_frameTools[m_currentFrame].graphicsCommandBuffer, opaque.indexCount, 1, opaque.firstIndex, 0, 0);
+            }
+        #endif
         /*-------------------------------
         End of rendering commands
         ---------------------------------*/
@@ -1496,6 +1591,9 @@ namespace BlitzenVulkan
             scene.ClearAll();
         }
 
+        #if BLITZEN_START_VULKAN_WITH_INDIRECT
+            vmaDestroyBuffer(m_allocator, m_drawIndirectDataBuffer.buffer, m_drawIndirectDataBuffer.allocation);
+        #endif
         vmaDestroyBuffer(m_allocator, m_globalIndexAndVertexBuffer.vertexBuffer.buffer, 
         m_globalIndexAndVertexBuffer.vertexBuffer.allocation);
         vmaDestroyBuffer(m_allocator, m_globalIndexAndVertexBuffer.indexBuffer.buffer, 
@@ -1540,6 +1638,10 @@ namespace BlitzenVulkan
 
     void GlobalMaterialData::CleanupResources(const VkDevice& device)
     {
+        #if BLITZEN_START_VULKAN_WITH_INDIRECT
+            vkDestroyPipeline(device, indirectDrawOpaqueGraphicsPipeline, nullptr);
+            vkDestroyPipelineLayout(device, globalIndirectDrawPipelineLayout, nullptr);
+        #endif
         vkDestroyPipeline(device, opaquePipeline.graphicsPipeline, nullptr);
         vkDestroyPipelineLayout(device, opaquePipeline.pipelineLayout, nullptr);
         vkDestroyDescriptorSetLayout(device, mainMaterialDescriptorSetLayout, nullptr);

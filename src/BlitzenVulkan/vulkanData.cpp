@@ -21,17 +21,38 @@ namespace BlitzenVulkan
         {
             //A mesh node's transform goes through one final modification, where it is multiplied by the scene's transform
             glm::mat4 finalMatrix = topMatrix * worldTransform;
-            for(GeoSurface& surface : pMesh->surfaces)
+
+            //All the surfaces of the mesh will be added to the draw context, so it is resized in advance
+            size_t startIndex = drawContext.opaqueRenderObjects.size();
+            drawContext.opaqueRenderObjects.resize(drawContext.opaqueRenderObjects.size() + pMesh->surfaces.size());
+            //If vulkan is going to need draw indirect during runtime, for each surface in the mesh there needs to be a draw indirect command
+            #if BLITZEN_START_VULKAN_WITH_INDIRECT
+                drawContext.indirectData.resize(drawContext.opaqueRenderObjects.size());
+            #endif
+            for(size_t i = startIndex; i < drawContext.opaqueRenderObjects.size(); ++i)
             {
-                //Each surface on a mesh adds a render object on the draw context
-                drawContext.opaqueRenderObjects.push_back(RenderObject());
-                RenderObject& newObject = drawContext.opaqueRenderObjects.back();
+                //Getting the current surface from the mesh and the current render object from the ones that were newly allocated
+                GeoSurface& currentSurface = pMesh->surfaces[i - startIndex];
+                RenderObject& newObject = drawContext.opaqueRenderObjects[i];
                 //Pass every surface constant to the object, so that it can be bound when drawing
-                newObject.firstIndex = surface.firstIndex;
-                newObject.indexCount = surface.indexCount;
-                newObject.pMaterial = surface.pMaterial;
+                newObject.firstIndex = currentSurface.firstIndex;
+                newObject.indexCount = currentSurface.indexCount;
+                newObject.pMaterial = currentSurface.pMaterial;
                 //The object will also need the mesh's/node's final matrix
                 newObject.modelMatrix = finalMatrix;
+
+                //Setting up for draw indirect if it needs to be available
+                #if BLITZEN_START_VULKAN_WITH_INDIRECT
+                    VkDrawIndexedIndirectCommand& currentDraw = drawContext.indirectData[i].indirectDraws;
+                    currentDraw.firstIndex = currentSurface.firstIndex;
+                    currentDraw.instanceCount = 1;
+                    currentDraw.indexCount = currentSurface.indexCount;
+                    currentDraw.firstInstance = 0;
+                    currentDraw.vertexOffset = 0;
+
+                    //Give the object's world matrix as well, so that it is passed to the GPU
+                    drawContext.indirectData[i].worldMatrix = finalMatrix;
+                #endif
             }
         }
         //Recurse down to update the next mesh node that is found

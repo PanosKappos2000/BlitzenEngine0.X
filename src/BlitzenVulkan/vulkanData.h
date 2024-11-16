@@ -16,6 +16,9 @@
 
 #include "vma/vk_mem_alloc.h"
 
+//Checks if Blitzen starts with draw indirect available
+#define BLITZEN_START_VULKAN_WITH_INDIRECT 1
+
 namespace BlitzenVulkan
 {
     class VulkanRenderer;
@@ -78,7 +81,7 @@ namespace BlitzenVulkan
         glm::vec4 color;
     };
 
-    struct SceneData
+    struct alignas(16)SceneData
     {
         glm::vec4 sunlightColor;
         glm::vec4 sunlightDirection;
@@ -87,7 +90,9 @@ namespace BlitzenVulkan
         glm::mat4 projectionMatrix;
         glm::mat4 projectionViewMatrix;
         //The scene data will be used to pass the vertex buffer address, this will probably need to be changed later
-        VkDeviceAddress vertexBufferAddress;
+        VkDeviceAddress vertexBufferAddress; 
+        //The scene data will be used to pass the indirect draw buffer address, this will probably need to be changed later
+        VkDeviceAddress indirectBufferAddress;
     };
 
     struct MaterialPipeline
@@ -171,6 +176,11 @@ namespace BlitzenVulkan
 
         VkDescriptorSetLayout mainMaterialDescriptorSetLayout;
 
+        #if BLITZEN_START_VULKAN_WITH_INDIRECT
+            VkPipeline indirectDrawOpaqueGraphicsPipeline;
+            VkPipelineLayout globalIndirectDrawPipelineLayout;
+        #endif
+
         void CleanupResources(const VkDevice& device);
     };
 
@@ -187,9 +197,29 @@ namespace BlitzenVulkan
         glm::mat4 modelMatrix;
     };
 
+    struct alignas(16) DrawIndirectData
+    {
+        //Since with indirect draw everything happens in the GPU, it will also need access to the world matrix
+        glm::mat4 worldMatrix;
+
+        VkDrawIndexedIndirectCommand indirectDraws;
+    };
+
     struct DrawContext
     {
         std::vector<RenderObject> opaqueRenderObjects;
+
+        //If Blitzen uses indirect commands, the draw context will include an array of draw indirect data
+        #if BLITZEN_START_VULKAN_WITH_INDIRECT
+            std::vector<DrawIndirectData> indirectData;
+        #endif
+    };
+
+    struct VulkanStats
+    {
+        #if BLITZEN_START_VULKAN_WITH_INDIRECT
+            bool drawIndirectMode = true;
+        #endif
     };
 
     class Node

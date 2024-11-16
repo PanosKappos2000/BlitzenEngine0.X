@@ -145,8 +145,11 @@ namespace BlitzenVulkan
         //Creates some placeholder data for the pseudo material system
         void InitMainMaterialData();
 
-        //Pass the vertices of all the world object to a storage buffer and all the indices to an index buffer
+        //Passes the vertices and indices of all the objects in the draw context to m_globalIndexAndVertexBuffer
         void UploadMeshBuffersToGPU(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices);
+
+        //Passes the vkCmdDrawIndexedIndirect commands and world matrix of all the objects in the draw context to m_drawIndirectDataBuffer
+        void UploadIndirectDrawBuffersToGPU(std::vector<DrawIndirectData>& dataToUpload);
 
         //Passes the material data to the descriptor set for one material instance
         void WriteMaterialData(MaterialInstance& materialInstance, MaterialResources& materialResources, MaterialPass pass);
@@ -170,6 +173,9 @@ namespace BlitzenVulkan
     public:
 
         WindowData m_windowData;
+
+        //Holds some variables that change the way the renderer works
+        VulkanStats stats;
 
         //Interfaces with the chosen gpu throughout the lifetime of the renderer
         VkDevice m_device = VK_NULL_HANDLE;
@@ -214,6 +220,8 @@ namespace BlitzenVulkan
 
         //Holds all the vertices and indices of every object in the world
         MeshBuffers m_globalIndexAndVertexBuffer;
+        //Holds all the vkDrawIndexedIndirectCommand, the objects' world matrix and the buffer that will be used for vkCmdDrawIndexedIndirect
+        AllocatedBuffer m_drawIndirectDataBuffer;
 
         //Holds all the scenes that have been loaded from a glb file
         std::unordered_map<std::string, LoadedScene> m_scenes;
