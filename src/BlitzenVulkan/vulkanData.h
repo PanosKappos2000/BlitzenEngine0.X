@@ -17,7 +17,7 @@
 #include "vma/vk_mem_alloc.h"
 
 //Checks if Blitzen starts with draw indirect available
-#define BLITZEN_START_VULKAN_WITH_INDIRECT 1
+#define BLITZEN_START_VULKAN_WITH_INDIRECT 0
 
 namespace BlitzenVulkan
 {

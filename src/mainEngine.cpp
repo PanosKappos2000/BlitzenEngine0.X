@@ -17,6 +17,7 @@ namespace BlitzenEngine
         m_mainController.SetKeyPressFunction(GLFW_KEY_TAB, GLFW_PRESS, [&]() {
             #if BLITZEN_START_VULKAN_WITH_INDIRECT
                 m_vulkan.stats.drawIndirectMode = !m_vulkan.stats.drawIndirectMode;
+                std::cout << m_vulkan.stats.drawIndirectMode ? "Indirect Drawing on\n" : "Indirect Drawing off\n";
             #endif
         });
         m_mainController.SetKeyPressFunction(GLFW_KEY_W, GLFW_PRESS, [&](){

@@ -35,7 +35,7 @@ namespace BlitzenVulkan
         //Temporarily holds all vertices and indices, once every scene and asset is loaded, it will all be uploaded in tounified buffer
         std::vector<Vertex> vertices;
         std::vector<uint32_t> indices;
-        std::string testScene = "Assets/structure.glb";
+        std::string testScene = "Assets/Structure.glb";
         LoadScene(testScene, "structure", vertices, indices);
         //Update every node in the scene to be included in the draw context
         m_scenes["structure"].AddToDrawContext(glm::mat4(1.f), m_mainDrawContext);
@@ -43,6 +43,10 @@ namespace BlitzenVulkan
         m_scenes["structure"].AddToDrawContext(glm::translate(glm::mat4(1.f), glm::vec3(0.f, 50.f, -100.f)), m_mainDrawContext);
         m_scenes["structure"].AddToDrawContext(glm::translate(glm::mat4(1.f), glm::vec3(200.f, -80.f, 0.f)), m_mainDrawContext);
         m_scenes["structure"].AddToDrawContext(glm::translate(glm::mat4(1.f), glm::vec3(-200.f, 0.f, 100.f)), m_mainDrawContext);
+        m_scenes["structure"].AddToDrawContext(glm::translate(glm::mat4(1.f), glm::vec3(-50.f, -50.f, -100.f)), m_mainDrawContext);
+        m_scenes["structure"].AddToDrawContext(glm::translate(glm::mat4(1.f), glm::vec3(-100.f, 50.f, -100.f)), m_mainDrawContext);
+        m_scenes["structure"].AddToDrawContext(glm::translate(glm::mat4(1.f), glm::vec3(-150.f, -80.f, 0.f)), m_mainDrawContext);
+        m_scenes["structure"].AddToDrawContext(glm::translate(glm::mat4(1.f), glm::vec3(-100.f, 0.f, 100.f)), m_mainDrawContext);
         //Upload vertices and indices for all object to m_globalIndexAndVertexBuffer
         UploadMeshBuffersToGPU(vertices, indices);
         //Upload indirect draw commands and other draw indirect data to m_drawIndirectDataBuffer
@@ -95,6 +99,7 @@ namespace BlitzenVulkan
         //Will allow us to create GPU pointers to access storage buffers
         vulkan12Features.bufferDeviceAddress = true;
         vulkan12Features.descriptorIndexing = true;
+        vulkan12Features.hostQueryReset = true;
 
         VkPhysicalDeviceVulkan11Features vulkan11Features{};
         vulkan11Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
@@ -322,6 +327,13 @@ namespace BlitzenVulkan
         VkSemaphoreCreateInfo semaphoreInfo{};
         semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
+        #ifndef NDEBUG
+            VkQueryPoolCreateInfo queryPoolInfo{};
+            queryPoolInfo.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
+            queryPoolInfo.queryCount = 2;
+            queryPoolInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
+        #endif
+
         for(size_t i = 0; i < m_frameTools.size(); ++i)
         {
             vkCreateCommandPool(m_device, &commandPoolsInfo, nullptr, &(m_frameTools[i].graphicsCommandPool));
@@ -332,6 +344,10 @@ namespace BlitzenVulkan
             vkCreateFence(m_device, &fencesInfo, nullptr, &(m_frameTools[i].frameCompleteFence));
             vkCreateSemaphore(m_device, &semaphoreInfo, nullptr, &(m_frameTools[i].imageAcquiredSemaphore));
             vkCreateSemaphore(m_device, &semaphoreInfo, nullptr, &(m_frameTools[i].readyToPresentSemaphore));
+
+            #ifndef NDEBUG
+                vkCreateQueryPool(m_device, &queryPoolInfo, nullptr, &(m_frameTools[i].timestampQueryPool));
+            #endif
 
             m_frameTools[i].sceneDataDescriptroAllocator.Init(&m_device);
             AllocateBuffer(m_frameTools[i].sceneDataUniformBuffer, sizeof(SceneData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, 
@@ -1286,9 +1302,31 @@ namespace BlitzenVulkan
         //Give the address of the shared vertex buffer to the global scene data
         m_globalSceneData.vertexBufferAddress = m_globalIndexAndVertexBuffer.vertexBufferAddress;
 
+        //Getting the tools that will be used this frame
+        VkCommandBuffer& frameCommandBuffer = m_frameTools[m_currentFrame].graphicsCommandBuffer;
+        VkFence& currentFrameCompleteFence = m_frameTools[m_currentFrame].frameCompleteFence;
+        VkSemaphore& currentImageAcquiredSemaphore = m_frameTools[m_currentFrame].imageAcquiredSemaphore;
+        VkSemaphore& currentReadyToPresentSemaphore = m_frameTools[m_currentFrame].readyToPresentSemaphore;
+        VkQueryPool& currentTimestampQueryPool = m_frameTools[m_currentFrame].timestampQueryPool;
+
         //Wait for queue submition to signal the fence with a timeout of 1 second
-        vkWaitForFences(m_device, 1, &(m_frameTools[m_currentFrame].frameCompleteFence), VK_TRUE, 1000000000);
-        vkResetFences(m_device, 1, &(m_frameTools[m_currentFrame].frameCompleteFence));
+        vkWaitForFences(m_device, 1, &currentFrameCompleteFence, VK_TRUE, 1000000000);
+        vkResetFences(m_device, 1, &currentFrameCompleteFence);
+
+        //Get the results of the previous frame
+        #ifndef NDEBUG
+            uint64_t queryResults[2];
+            vkGetQueryPoolResults(m_device, m_frameTools[m_currentFrame].timestampQueryPool, 
+            0, 2, sizeof(queryResults), queryResults, sizeof(uint64_t), VK_QUERY_RESULT_64_BIT);
+            VkPhysicalDeviceProperties props;
+            vkGetPhysicalDeviceProperties(m_bootstrapObjects.chosenGPU, &props);
+            double gpuStart = static_cast<double>(queryResults[0]) * props.limits.timestampPeriod * 1e-6;
+            double gpuEnd = static_cast<double>(queryResults[1]) * props.limits.timestampPeriod * 1e-6;
+            double frameGPU = gpuEnd - gpuStart;
+            char title[256];
+            sprintf(title, "GPU: %lf", frameGPU);
+            glfwSetWindowTitle(m_windowData.pWindow, title);
+        #endif
 
 
         //Passing global scene data to the shaders
@@ -1319,12 +1357,16 @@ namespace BlitzenVulkan
         vkAcquireNextImageKHR(m_device, m_bootstrapObjects.swapchain, 1000000000, m_frameTools[m_currentFrame].imageAcquiredSemaphore,
         VK_NULL_HANDLE, &swapchainImageIndex);
 
+        //Reset the timestamp before recording commands
+        #ifndef NDEBUG
+            vkResetQueryPool(m_device, currentTimestampQueryPool, 0, 2);
+        #endif
         //Return the command buffer to the initial state and then put it in the recording state
-        vkResetCommandBuffer(m_frameTools[m_currentFrame].graphicsCommandBuffer, 0);
+        vkResetCommandBuffer(frameCommandBuffer, 0);
         VkCommandBufferBeginInfo commandBufferBeginInfo{};
         commandBufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         commandBufferBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-        vkBeginCommandBuffer(m_frameTools[m_currentFrame].graphicsCommandBuffer, &commandBufferBeginInfo);
+        vkBeginCommandBuffer(frameCommandBuffer, &commandBufferBeginInfo);
 
         /*--------------------------------------------------------------------------------------------
         After this point and until vkEndCommandBuffer is called, all graphics commands that need to be 
@@ -1332,7 +1374,7 @@ namespace BlitzenVulkan
         --------------------------------------------------------------------------------------------*/
 
         //Clearing the color of the drawing attachment image to get a dark, green-blue color on the window
-        TransitionImageLayout(m_frameTools[m_currentFrame].graphicsCommandBuffer, m_drawingAttachment.image, 
+        TransitionImageLayout(frameCommandBuffer, m_drawingAttachment.image, 
         VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_ACCESS_2_MEMORY_WRITE_BIT, VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT, 
         VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT);
         VkClearColorValue clearColorValue{};
@@ -1346,14 +1388,14 @@ namespace BlitzenVulkan
         clearColorImageSubresourceRange.baseArrayLayer = 0;
         clearColorImageSubresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
         clearColorImageSubresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        vkCmdClearColorImage(m_frameTools[m_currentFrame].graphicsCommandBuffer, m_drawingAttachment.image, VK_IMAGE_LAYOUT_GENERAL,
+        vkCmdClearColorImage(frameCommandBuffer, m_drawingAttachment.image, VK_IMAGE_LAYOUT_GENERAL,
         &clearColorValue, 1, &clearColorImageSubresourceRange);
 
         //Transition the image layout of the attachments so that they are ready to begin rendering
-        TransitionImageLayout(m_frameTools[m_currentFrame].graphicsCommandBuffer, m_drawingAttachment.image, VK_IMAGE_LAYOUT_GENERAL, 
+        TransitionImageLayout(frameCommandBuffer, m_drawingAttachment.image, VK_IMAGE_LAYOUT_GENERAL, 
         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_ACCESS_2_MEMORY_WRITE_BIT, VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT, 
         VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
-        TransitionImageLayout(m_frameTools[m_currentFrame].graphicsCommandBuffer, m_depthAttachment.image, VK_IMAGE_LAYOUT_UNDEFINED, 
+        TransitionImageLayout(frameCommandBuffer, m_depthAttachment.image, VK_IMAGE_LAYOUT_UNDEFINED, 
         VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_ACCESS_2_MEMORY_WRITE_BIT, VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT, 
         VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT);
 
@@ -1388,32 +1430,32 @@ namespace BlitzenVulkan
         After this point and until vkCmdEndRendring is called, all rendering commands are recorded
         ---------------------------------------------------------------------------------------------*/
 
-        vkCmdBeginRendering(m_frameTools[m_currentFrame].graphicsCommandBuffer, &mainRenderingInfo);
+        vkCmdBeginRendering(frameCommandBuffer, &mainRenderingInfo); 
 
         //Bind the index buffer, it's the same for both the indirect and traditional version of the pipeline
-        vkCmdBindIndexBuffer(m_frameTools[m_currentFrame].graphicsCommandBuffer, m_globalIndexAndVertexBuffer.indexBuffer.buffer, 
+        vkCmdBindIndexBuffer(frameCommandBuffer, m_globalIndexAndVertexBuffer.indexBuffer.buffer, 
         0, VK_INDEX_TYPE_UINT32);
         #if BLITZEN_START_VULKAN_WITH_INDIRECT
             //Bind the pipeline and the global descriptor set for the indirect pipeline if it is active
             if(stats.drawIndirectMode)
             {
-                vkCmdBindPipeline(m_frameTools[m_currentFrame].graphicsCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, 
+                vkCmdBindPipeline(frameCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, 
                 m_mainMaterialData.indirectDrawOpaqueGraphicsPipeline);
-                vkCmdBindDescriptorSets(m_frameTools[m_currentFrame].graphicsCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, 
+                vkCmdBindDescriptorSets(frameCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, 
                 m_mainMaterialData.globalIndirectDrawPipelineLayout, 0, 1, &sceneDataDescriptorSet, 0, nullptr);
             }
             //Bind the pipeline and the global descriptor set for the traditional pipeline, if indirect is inactive
             else
             {
-                vkCmdBindPipeline(m_frameTools[m_currentFrame].graphicsCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, 
+                vkCmdBindPipeline(frameCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, 
                 m_mainMaterialData.opaquePipeline.graphicsPipeline);
-                vkCmdBindDescriptorSets(m_frameTools[m_currentFrame].graphicsCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, 
+                vkCmdBindDescriptorSets(frameCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, 
                 m_mainMaterialData.opaquePipeline.pipelineLayout, 0, 1, &sceneDataDescriptorSet, 0, nullptr);
             }
         #else
-            vkCmdBindPipeline(m_frameTools[m_currentFrame].graphicsCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+            vkCmdBindPipeline(frameCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
             m_mainMaterialData.opaquePipeline.graphicsPipeline);
-            vkCmdBindDescriptorSets(m_frameTools[m_currentFrame].graphicsCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+            vkCmdBindDescriptorSets(frameCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
             m_mainMaterialData.opaquePipeline.pipelineLayout, 0, 1, &sceneDataDescriptorSet, 0, nullptr);
         #endif
         //Since viewport and scissor were specified in the dynamic state, they now need to be set
@@ -1424,19 +1466,23 @@ namespace BlitzenVulkan
         viewport.height = static_cast<float>(m_drawExtent.height);
         viewport.minDepth = 0.f;
         viewport.maxDepth = 1.f;
-        vkCmdSetViewport(m_frameTools[m_currentFrame].graphicsCommandBuffer, 0, 1, &viewport);
+        vkCmdSetViewport(frameCommandBuffer, 0, 1, &viewport);
         VkRect2D scissor{};
         scissor.extent.width = m_drawExtent.width;
         scissor.extent.height = m_drawExtent.height;
         scissor.offset.x = 0;
         scissor.offset.y = 0;
-        vkCmdSetScissor(m_frameTools[m_currentFrame].graphicsCommandBuffer, 0, 1, &scissor);
+        vkCmdSetScissor(frameCommandBuffer, 0, 1, &scissor);
 
+        //Start a timestamp 
+        #ifndef NDEBUG
+            vkCmdWriteTimestamp2(frameCommandBuffer, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, currentTimestampQueryPool, 0);
+        #endif 
         #if BLITZEN_START_VULKAN_WITH_INDIRECT
             if(stats.drawIndirectMode)
             {
                 //This is just beatiful
-                vkCmdDrawIndexedIndirect(m_frameTools[m_currentFrame].graphicsCommandBuffer, m_drawIndirectDataBuffer.buffer, 
+                vkCmdDrawIndexedIndirect(frameCommandBuffer, m_drawIndirectDataBuffer.buffer, 
                 offsetof(DrawIndirectData, indirectDraws), static_cast<uint32_t>(m_mainDrawContext.indirectData.size()), sizeof(DrawIndirectData));
             }
             //Go with the traditional method if draw indirect is inactive
@@ -1445,13 +1491,13 @@ namespace BlitzenVulkan
                 for(size_t i = 0; i < m_mainDrawContext.opaqueRenderObjects.size(); ++i)
                 {
                     //The model/surface that is currently being worked on
-                    RenderObject& opaque = m_mainDrawContext.opaqueRenderObjects[i];
+                        RenderObject& opaque = m_mainDrawContext.opaqueRenderObjects[i];
 
                     ModelMatrixPushConstant pushConstant;
                     pushConstant.modelMatrix = opaque.modelMatrix;
-                    vkCmdPushConstants(m_frameTools[m_currentFrame].graphicsCommandBuffer, opaque.pMaterial->pPipeline->pipelineLayout, 
+                    vkCmdPushConstants(frameCommandBuffer, opaque.pMaterial->pPipeline->pipelineLayout, 
                     VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(ModelMatrixPushConstant), &pushConstant);
-                    vkCmdDrawIndexed(m_frameTools[m_currentFrame].graphicsCommandBuffer, opaque.indexCount, 1, opaque.firstIndex, 0, 0);
+                    vkCmdDrawIndexed(frameCommandBuffer, opaque.indexCount, 1, opaque.firstIndex, 0, 0);
                 }
             }
         #else
@@ -1462,29 +1508,33 @@ namespace BlitzenVulkan
 
                 ModelMatrixPushConstant pushConstant;
                 pushConstant.modelMatrix = opaque.modelMatrix;
-                vkCmdPushConstants(m_frameTools[m_currentFrame].graphicsCommandBuffer, opaque.pMaterial->pPipeline->pipelineLayout,
+                vkCmdPushConstants(frameCommandBuffer, opaque.pMaterial->pPipeline->pipelineLayout,
                     VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(ModelMatrixPushConstant), &pushConstant);
-                vkCmdDrawIndexed(m_frameTools[m_currentFrame].graphicsCommandBuffer, opaque.indexCount, 1, opaque.firstIndex, 0, 0);
+                vkCmdDrawIndexed(frameCommandBuffer, opaque.indexCount, 1, opaque.firstIndex, 0, 0);
             }
+        #endif
+        //End the timestamp when drawing commands end
+        #ifndef NDEBUG
+            vkCmdWriteTimestamp2(frameCommandBuffer, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, currentTimestampQueryPool, 1);
         #endif
         /*-------------------------------
         End of rendering commands
         ---------------------------------*/
-        vkCmdEndRendering(m_frameTools[m_currentFrame].graphicsCommandBuffer);
+        vkCmdEndRendering(frameCommandBuffer);
 
         //Transition the drawing attachment image for a transfer operation as the source and the swapchain image as the destination
-        TransitionImageLayout(m_frameTools[m_currentFrame].graphicsCommandBuffer, m_drawingAttachment.image, 
+        TransitionImageLayout(frameCommandBuffer, m_drawingAttachment.image, 
         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_ACCESS_2_MEMORY_WRITE_BIT, VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT, 
         VK_ACCESS_2_TRANSFER_READ_BIT, VK_PIPELINE_STAGE_2_BLIT_BIT);
-        TransitionImageLayout(m_frameTools[m_currentFrame].graphicsCommandBuffer, m_bootstrapObjects.swapchainImages[swapchainImageIndex], 
+        TransitionImageLayout(frameCommandBuffer, m_bootstrapObjects.swapchainImages[swapchainImageIndex], 
         VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_ACCESS_2_TRANSFER_READ_BIT, VK_PIPELINE_STAGE_2_BLIT_BIT, 
         VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_BLIT_BIT);
-        CopyImageToImage(m_frameTools[m_currentFrame].graphicsCommandBuffer, m_drawingAttachment.image, 
+        CopyImageToImage(frameCommandBuffer, m_drawingAttachment.image, 
         m_bootstrapObjects.swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         m_drawExtent, m_bootstrapObjects.swapchainExtent);
 
         //Transition the image layout so that it can be used in swapchain presentation
-        TransitionImageLayout(m_frameTools[m_currentFrame].graphicsCommandBuffer, m_bootstrapObjects.swapchainImages[swapchainImageIndex],
+        TransitionImageLayout(frameCommandBuffer, m_bootstrapObjects.swapchainImages[swapchainImageIndex],
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR , VK_ACCESS_2_MEMORY_WRITE_BIT, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, 
         VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT, VK_PIPELINE_STAGE_2_NONE);
 
@@ -1493,14 +1543,16 @@ namespace BlitzenVulkan
         so that the graphics commands of this frame can be executed
         --------------------------------------------------------------------------------------------------------------------------------*/
 
-        vkEndCommandBuffer(m_frameTools[m_currentFrame].graphicsCommandBuffer);
+        vkEndCommandBuffer(frameCommandBuffer);
+
+        //vkGetQueryPoolResults(m_device, currentTimestampQueryPool, 0, 1, )
 
         //Initializing the info for the semaphore that tells commands to stop until a swapchain image is acquired
         VkSemaphoreSubmitInfo waitSemaphoreInfo{};
         waitSemaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
         waitSemaphoreInfo.deviceIndex = 0;
         waitSemaphoreInfo.value = 1;
-        waitSemaphoreInfo.semaphore = m_frameTools[m_currentFrame].imageAcquiredSemaphore;
+        waitSemaphoreInfo.semaphore = currentImageAcquiredSemaphore;
         waitSemaphoreInfo.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
 
         //Initializing the info for the semaphore that tells commands that rendering commands are done and the frame is ready for presentation
@@ -1508,13 +1560,13 @@ namespace BlitzenVulkan
         signalSemaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
         signalSemaphoreInfo.deviceIndex = 0;
         signalSemaphoreInfo.value = 1;
-        signalSemaphoreInfo.semaphore = m_frameTools[m_currentFrame].readyToPresentSemaphore;
+        signalSemaphoreInfo.semaphore = currentReadyToPresentSemaphore;
         signalSemaphoreInfo.stageMask = VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT;
 
         //Initializing the info for the graphics command buffer that will be submitted
         VkCommandBufferSubmitInfo graphicsCommandBufferInfo{};
         graphicsCommandBufferInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
-        graphicsCommandBufferInfo.commandBuffer = m_frameTools[m_currentFrame].graphicsCommandBuffer;
+        graphicsCommandBufferInfo.commandBuffer = frameCommandBuffer;
         graphicsCommandBufferInfo.deviceMask = 0;
 
         //Initialing the info for the entire submit operation, including the semaphores, command buffer and the fence that will be signalled at the end
@@ -1526,13 +1578,13 @@ namespace BlitzenVulkan
         graphicsCommandsSubmit.pSignalSemaphoreInfos = &signalSemaphoreInfo;
         graphicsCommandsSubmit.commandBufferInfoCount = 1;
         graphicsCommandsSubmit.pCommandBufferInfos = &graphicsCommandBufferInfo;
-        vkQueueSubmit2(m_queues.graphicsQueue, 1, &graphicsCommandsSubmit, m_frameTools[m_currentFrame].frameCompleteFence);
+        vkQueueSubmit2(m_queues.graphicsQueue, 1, &graphicsCommandsSubmit, currentFrameCompleteFence);
 
         //With the commands submitted to the queues, the frame presentation is ready to be set up
         VkPresentInfoKHR presentInfo{};
         presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
         presentInfo.waitSemaphoreCount = 1;
-        presentInfo.pWaitSemaphores = &(m_frameTools[m_currentFrame].readyToPresentSemaphore);
+        presentInfo.pWaitSemaphores = &currentReadyToPresentSemaphore;
         presentInfo.swapchainCount = 1;
         presentInfo.pSwapchains = &(m_bootstrapObjects.swapchain);
         presentInfo.pImageIndices = &swapchainImageIndex;
@@ -1667,6 +1719,10 @@ namespace BlitzenVulkan
             vkDestroyFence(m_device, m_frameTools[i].frameCompleteFence, nullptr);
             vkDestroySemaphore(m_device, m_frameTools[i].imageAcquiredSemaphore, nullptr);
             vkDestroySemaphore(m_device, m_frameTools[i].readyToPresentSemaphore, nullptr);
+
+            #ifndef NDEBUG
+                vkDestroyQueryPool(m_device, m_frameTools[i].timestampQueryPool, nullptr);
+            #endif
 
             m_frameTools[i].sceneDataDescriptroAllocator.CleanupResources();
             vmaDestroyBuffer(m_allocator, m_frameTools[i].sceneDataUniformBuffer.buffer, 
