@@ -14,6 +14,11 @@ namespace BlitzenEngine
         m_mainController.SetKeyPressFunction(GLFW_KEY_ESCAPE, GLFW_PRESS, [&]() {
             m_vulkan.m_windowData.bWindowShouldClose = true;
         });
+        m_mainController.SetKeyPressFunction(GLFW_KEY_TAB, GLFW_PRESS, [&]() {
+            #if BLITZEN_START_VULKAN_WITH_INDIRECT
+                m_vulkan.stats.drawIndirectMode = !m_vulkan.stats.drawIndirectMode;
+            #endif
+        });
         m_mainController.SetKeyPressFunction(GLFW_KEY_W, GLFW_PRESS, [&](){
             m_mainCamera.MoveCamera(glm::vec3(0.0f, 0.0f, -1.0f), 0.f, 0.f);
         });

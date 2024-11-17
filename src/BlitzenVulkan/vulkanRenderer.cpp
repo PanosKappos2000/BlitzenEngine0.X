@@ -39,6 +39,10 @@ namespace BlitzenVulkan
         LoadScene(testScene, "structure", vertices, indices);
         //Update every node in the scene to be included in the draw context
         m_scenes["structure"].AddToDrawContext(glm::mat4(1.f), m_mainDrawContext);
+        m_scenes["structure"].AddToDrawContext(glm::translate(glm::mat4(1.f), glm::vec3(500.f, -50.f, -100.f)), m_mainDrawContext);
+        m_scenes["structure"].AddToDrawContext(glm::translate(glm::mat4(1.f), glm::vec3(0.f, 50.f, -100.f)), m_mainDrawContext);
+        m_scenes["structure"].AddToDrawContext(glm::translate(glm::mat4(1.f), glm::vec3(200.f, -80.f, 0.f)), m_mainDrawContext);
+        m_scenes["structure"].AddToDrawContext(glm::translate(glm::mat4(1.f), glm::vec3(-200.f, 0.f, 100.f)), m_mainDrawContext);
         //Upload vertices and indices for all object to m_globalIndexAndVertexBuffer
         UploadMeshBuffersToGPU(vertices, indices);
         //Upload indirect draw commands and other draw indirect data to m_drawIndirectDataBuffer
@@ -1431,6 +1435,7 @@ namespace BlitzenVulkan
         #if BLITZEN_START_VULKAN_WITH_INDIRECT
             if(stats.drawIndirectMode)
             {
+                //This is just beatiful
                 vkCmdDrawIndexedIndirect(m_frameTools[m_currentFrame].graphicsCommandBuffer, m_drawIndirectDataBuffer.buffer, 
                 offsetof(DrawIndirectData, indirectDraws), static_cast<uint32_t>(m_mainDrawContext.indirectData.size()), sizeof(DrawIndirectData));
             }
