@@ -35,18 +35,28 @@ namespace BlitzenVulkan
         //Temporarily holds all vertices and indices, once every scene and asset is loaded, it will all be uploaded in tounified buffer
         std::vector<Vertex> vertices;
         std::vector<uint32_t> indices;
-        std::string testScene = "Assets/Structure.glb";
+        std::string testScene = "Assets/structure.glb";
         LoadScene(testScene, "structure", vertices, indices);
         //Update every node in the scene to be included in the draw context
         m_scenes["structure"].AddToDrawContext(glm::mat4(1.f), m_mainDrawContext);
-        m_scenes["structure"].AddToDrawContext(glm::translate(glm::mat4(1.f), glm::vec3(500.f, -50.f, -100.f)), m_mainDrawContext);
-        m_scenes["structure"].AddToDrawContext(glm::translate(glm::mat4(1.f), glm::vec3(0.f, 50.f, -100.f)), m_mainDrawContext);
-        m_scenes["structure"].AddToDrawContext(glm::translate(glm::mat4(1.f), glm::vec3(200.f, -80.f, 0.f)), m_mainDrawContext);
-        m_scenes["structure"].AddToDrawContext(glm::translate(glm::mat4(1.f), glm::vec3(-200.f, 0.f, 100.f)), m_mainDrawContext);
-        m_scenes["structure"].AddToDrawContext(glm::translate(glm::mat4(1.f), glm::vec3(-50.f, -50.f, -100.f)), m_mainDrawContext);
-        m_scenes["structure"].AddToDrawContext(glm::translate(glm::mat4(1.f), glm::vec3(-100.f, 50.f, -100.f)), m_mainDrawContext);
-        m_scenes["structure"].AddToDrawContext(glm::translate(glm::mat4(1.f), glm::vec3(-150.f, -80.f, 0.f)), m_mainDrawContext);
-        m_scenes["structure"].AddToDrawContext(glm::translate(glm::mat4(1.f), glm::vec3(-100.f, 0.f, 100.f)), m_mainDrawContext);
+        #ifdef NDEBUG
+        float iter = 1;
+        for (float f = 0.f; f < 1.f; f += 0.1f)
+        {
+            iter *= -1;
+            m_scenes["structure"].AddToDrawContext(glm::translate(glm::mat4(1.f), glm::vec3(-iter, iter, -f)), m_mainDrawContext);
+        }
+        for (float f = 0.f; f < 1.f; f += 0.1f)
+        {
+            iter *= -1;
+            m_scenes["structure"].AddToDrawContext(glm::translate(glm::mat4(1.f), glm::vec3(iter, f, -iter)), m_mainDrawContext);
+        }
+        for (float f = 0.f; f < 1.f; f += 0.1f)
+        {
+            iter *= -1;
+            m_scenes["structure"].AddToDrawContext(glm::translate(glm::mat4(1.f), glm::vec3(f, -iter, iter)), m_mainDrawContext);
+        }
+        #endif
         //Upload vertices and indices for all object to m_globalIndexAndVertexBuffer
         UploadMeshBuffersToGPU(vertices, indices);
         //Upload indirect draw commands and other draw indirect data to m_drawIndirectDataBuffer
@@ -327,12 +337,12 @@ namespace BlitzenVulkan
         VkSemaphoreCreateInfo semaphoreInfo{};
         semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
-        #ifndef NDEBUG
+        //#ifndef NDEBUG
             VkQueryPoolCreateInfo queryPoolInfo{};
             queryPoolInfo.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
             queryPoolInfo.queryCount = 2;
             queryPoolInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
-        #endif
+        //#endif
 
         for(size_t i = 0; i < m_frameTools.size(); ++i)
         {
@@ -345,9 +355,9 @@ namespace BlitzenVulkan
             vkCreateSemaphore(m_device, &semaphoreInfo, nullptr, &(m_frameTools[i].imageAcquiredSemaphore));
             vkCreateSemaphore(m_device, &semaphoreInfo, nullptr, &(m_frameTools[i].readyToPresentSemaphore));
 
-            #ifndef NDEBUG
+            //#ifndef NDEBUG
                 vkCreateQueryPool(m_device, &queryPoolInfo, nullptr, &(m_frameTools[i].timestampQueryPool));
-            #endif
+            //#endif
 
             m_frameTools[i].sceneDataDescriptroAllocator.Init(&m_device);
             AllocateBuffer(m_frameTools[i].sceneDataUniformBuffer, sizeof(SceneData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, 
@@ -1307,14 +1317,16 @@ namespace BlitzenVulkan
         VkFence& currentFrameCompleteFence = m_frameTools[m_currentFrame].frameCompleteFence;
         VkSemaphore& currentImageAcquiredSemaphore = m_frameTools[m_currentFrame].imageAcquiredSemaphore;
         VkSemaphore& currentReadyToPresentSemaphore = m_frameTools[m_currentFrame].readyToPresentSemaphore;
-        VkQueryPool& currentTimestampQueryPool = m_frameTools[m_currentFrame].timestampQueryPool;
+        //#ifndef NDEBUG
+            VkQueryPool& currentTimestampQueryPool = m_frameTools[m_currentFrame].timestampQueryPool;
+        //#endif
 
         //Wait for queue submition to signal the fence with a timeout of 1 second
         vkWaitForFences(m_device, 1, &currentFrameCompleteFence, VK_TRUE, 1000000000);
         vkResetFences(m_device, 1, &currentFrameCompleteFence);
 
         //Get the results of the previous frame
-        #ifndef NDEBUG
+        //#ifndef NDEBUG
             uint64_t queryResults[2];
             vkGetQueryPoolResults(m_device, m_frameTools[m_currentFrame].timestampQueryPool, 
             0, 2, sizeof(queryResults), queryResults, sizeof(uint64_t), VK_QUERY_RESULT_64_BIT);
@@ -1326,7 +1338,7 @@ namespace BlitzenVulkan
             char title[256];
             sprintf(title, "GPU: %lf", frameGPU);
             glfwSetWindowTitle(m_windowData.pWindow, title);
-        #endif
+        //#endif
 
 
         //Passing global scene data to the shaders
@@ -1358,9 +1370,9 @@ namespace BlitzenVulkan
         VK_NULL_HANDLE, &swapchainImageIndex);
 
         //Reset the timestamp before recording commands
-        #ifndef NDEBUG
+        //#ifndef NDEBUG
             vkResetQueryPool(m_device, currentTimestampQueryPool, 0, 2);
-        #endif
+        //#endif
         //Return the command buffer to the initial state and then put it in the recording state
         vkResetCommandBuffer(frameCommandBuffer, 0);
         VkCommandBufferBeginInfo commandBufferBeginInfo{};
@@ -1475,9 +1487,9 @@ namespace BlitzenVulkan
         vkCmdSetScissor(frameCommandBuffer, 0, 1, &scissor);
 
         //Start a timestamp 
-        #ifndef NDEBUG
+        //#ifndef NDEBUG
             vkCmdWriteTimestamp2(frameCommandBuffer, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, currentTimestampQueryPool, 0);
-        #endif 
+        //#endif 
         #if BLITZEN_START_VULKAN_WITH_INDIRECT
             if(stats.drawIndirectMode)
             {
@@ -1514,9 +1526,9 @@ namespace BlitzenVulkan
             }
         #endif
         //End the timestamp when drawing commands end
-        #ifndef NDEBUG
+        //#ifndef NDEBUG
             vkCmdWriteTimestamp2(frameCommandBuffer, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, currentTimestampQueryPool, 1);
-        #endif
+        //#endif
         /*-------------------------------
         End of rendering commands
         ---------------------------------*/
@@ -1720,9 +1732,9 @@ namespace BlitzenVulkan
             vkDestroySemaphore(m_device, m_frameTools[i].imageAcquiredSemaphore, nullptr);
             vkDestroySemaphore(m_device, m_frameTools[i].readyToPresentSemaphore, nullptr);
 
-            #ifndef NDEBUG
+            //#ifndef NDEBUG
                 vkDestroyQueryPool(m_device, m_frameTools[i].timestampQueryPool, nullptr);
-            #endif
+            //#endif
 
             m_frameTools[i].sceneDataDescriptroAllocator.CleanupResources();
             vmaDestroyBuffer(m_allocator, m_frameTools[i].sceneDataUniformBuffer.buffer, 

@@ -91,9 +91,9 @@ namespace BlitzenVulkan
         DescriptorAllocator sceneDataDescriptroAllocator;
         AllocatedBuffer sceneDataUniformBuffer;
 
-        #ifndef NDEBUG
+        //#ifndef NDEBUG
             VkQueryPool timestampQueryPool;
-        #endif
+        //#endif
     };
 
     class VulkanRenderer

@@ -39,9 +39,8 @@ layout(location = 0) out vec3 outColor;
 void main()
 {
     Vertex currentVertex = sceneData.vertexBuffer.vertices[gl_VertexIndex];
-    mat4 currentWorldMatrix = sceneData.indirectDataBuffer.indirectDraws[gl_DrawIDARB].worldMatrix;
 
-    gl_Position = sceneData.projectionViewMatrix * currentWorldMatrix * vec4(currentVertex.position, 1.0f);
+    gl_Position = sceneData.projectionViewMatrix * sceneData.indirectDataBuffer.indirectDraws[gl_DrawIDARB].worldMatrix * vec4(currentVertex.position, 1.0f);
     outColor = currentVertex.color.xyz; 
 
 }
