@@ -27,7 +27,8 @@ namespace BlitzenVulkan
             drawContext.opaqueRenderObjects.resize(drawContext.opaqueRenderObjects.size() + pMesh->surfaces.size());
             //If vulkan is going to need draw indirect during runtime, for each surface in the mesh there needs to be a draw indirect command
             #if BLITZEN_START_VULKAN_WITH_INDIRECT
-                drawContext.indirectData.resize(drawContext.opaqueRenderObjects.size());
+                drawContext.indirectCommands.resize(drawContext.opaqueRenderObjects.size());
+                drawContext.indirectRenderObjects.resize(drawContext.opaqueRenderObjects.size());
             #endif
             for(size_t i = startIndex; i < drawContext.opaqueRenderObjects.size(); ++i)
             {
@@ -43,7 +44,7 @@ namespace BlitzenVulkan
 
                 //Setting up for draw indirect if it needs to be available
                 #if BLITZEN_START_VULKAN_WITH_INDIRECT
-                    VkDrawIndexedIndirectCommand& currentDraw = drawContext.indirectData[i].indirectDraws;
+                    VkDrawIndexedIndirectCommand& currentDraw = drawContext.indirectCommands[i].indirectDraws;
                     currentDraw.firstIndex = currentSurface.firstIndex;
                     currentDraw.instanceCount = 1;
                     currentDraw.indexCount = currentSurface.indexCount;
@@ -51,7 +52,8 @@ namespace BlitzenVulkan
                     currentDraw.vertexOffset = 0;
 
                     //Give the object's world matrix as well, so that it is passed to the GPU
-                    drawContext.indirectData[i].worldMatrix = finalMatrix;
+                    drawContext.indirectRenderObjects[i].worldMatrix = finalMatrix;
+                    drawContext.indirectRenderObjects[i].materialIndex = currentSurface.pMaterial->materialIndex;
                 #endif
             }
         }

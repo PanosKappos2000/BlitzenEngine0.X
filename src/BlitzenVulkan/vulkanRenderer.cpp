@@ -61,10 +61,13 @@ namespace BlitzenVulkan
         }
         #endif
         //Upload vertices and indices for all object to m_globalIndexAndVertexBuffer
-        UploadMeshBuffersToGPU(vertices, indices, materialConstants);
+        
         //Upload indirect draw commands and other draw indirect data to m_drawIndirectDataBuffer
         #if BLITZEN_START_VULKAN_WITH_INDIRECT
-            UploadIndirectDrawBuffersToGPU(m_mainDrawContext.indirectData);
+            UploadGlobalBuffersToGPU(vertices, indices, materialConstants, m_mainDrawContext.indirectCommands);
+        #else
+            std::vector<DrawIndirectCommand> emptyIndirect;
+            UploadGlobalBuffersToGPU(vertices, indices, materialConstants, emptyIndirect);
         #endif
     }
 
@@ -677,14 +680,13 @@ namespace BlitzenVulkan
         #endif
     }
 
-    void VulkanRenderer::UploadMeshBuffersToGPU(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices, 
-    std::vector<MaterialConstants>& materialConstants)
+    void VulkanRenderer::UploadGlobalBuffersToGPU(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices, 
+    std::vector<MaterialConstants>& materialConstants, std::vector<DrawIndirectCommand>& drawIndirectCommands)
     {
         //Allocates the vertex buffer as a storage buffer that can accept data transfers and can retrive a device address
         VkDeviceSize vertexBufferSize = static_cast<VkDeviceSize>(vertices.size() * sizeof(Vertex));
         AllocateBuffer(m_globalIndexAndVertexBuffer.vertexBuffer, vertexBufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | 
         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
-
         //Retrieving the address of the vertex buffer so that it can be accessed in the shader
         VkBufferDeviceAddressInfo vertexBufferAddressInfo{};
         vertexBufferAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
@@ -700,16 +702,25 @@ namespace BlitzenVulkan
         VkDeviceSize materialBufferSize = static_cast<VkDeviceSize>(materialConstants.size() * sizeof(MaterialConstants));
         AllocateBuffer(m_globalMaterialConstantsBuffer, materialBufferSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | 
         VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
-
         //Store the address of the material buffer to the scene data so that it can be passed to the shaders every frame
         VkBufferDeviceAddressInfo materialBufferAddressInfo{};
         materialBufferAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
         materialBufferAddressInfo.buffer = m_globalMaterialConstantsBuffer.buffer;
         m_globalSceneData.materialConstantsBufferAddress = vkGetBufferDeviceAddress(m_device, &materialBufferAddressInfo);
 
+        //Allocate the buffer that will hold the indirect commands 
+        VkDeviceSize indirectBufferSize = sizeof(DrawIndirectCommand) * drawIndirectCommands.size();
+        AllocateBuffer(m_drawIndirectCommandsBuffer, indirectBufferSize, VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | 
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
+        //Store the device address of the indirect buffer, so that it can be passed to the shaders every frame
+        VkBufferDeviceAddressInfo allocatedBufferAddressInfo{};
+        allocatedBufferAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+        allocatedBufferAddressInfo.buffer = m_drawIndirectCommandsBuffer.buffer;
+        m_globalSceneData.indirectBufferAddress = vkGetBufferDeviceAddress(m_device, &allocatedBufferAddressInfo);
+
         //Allocate a staging buffer to access the buffer data and copy it to the GPU buffers
         AllocatedBuffer stagingBuffer;
-        AllocateBuffer(stagingBuffer, vertexBufferSize + indexBufferSize + materialBufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 
+        AllocateBuffer(stagingBuffer, vertexBufferSize + indexBufferSize + materialBufferSize + indirectBufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 
         VMA_MEMORY_USAGE_CPU_TO_GPU);
         void* allBuffersData = stagingBuffer.allocation->GetMappedData();
         //Copy all the necessary data to the staging buffer at the right offsets
@@ -718,6 +729,8 @@ namespace BlitzenVulkan
         static_cast<size_t>(indexBufferSize));
         memcpy(reinterpret_cast<char*>(allBuffersData) + static_cast<size_t>(vertexBufferSize + indexBufferSize), materialConstants.data(),
         static_cast<size_t>(materialBufferSize));
+        memcpy(reinterpret_cast<char*>(allBuffersData) + static_cast<size_t>(vertexBufferSize + indexBufferSize + materialBufferSize), 
+        drawIndirectCommands.data(), static_cast<size_t>(indirectBufferSize));
 
         //Start recording commands for copying the staging buffer into the GPU buffers
         StartRecordingCommands();
@@ -770,44 +783,21 @@ namespace BlitzenVulkan
         //Record the copy command
         vkCmdCopyBuffer2(m_commands.commandBuffer, &materialConstantsBufferCopy);
 
-        SubmitCommands();
-
-        vmaDestroyBuffer(m_allocator, stagingBuffer.buffer, stagingBuffer.allocation);
-    }
-
-    void VulkanRenderer::UploadIndirectDrawBuffersToGPU(std::vector<DrawIndirectData>& dataToUpload)
-    {
-        //Allocate the buffer that will hold the indirect commands and the data needed for the objects
-        VkDeviceSize bufferSize = sizeof(DrawIndirectData) * dataToUpload.size();
-        AllocateBuffer(m_drawIndirectDataBuffer, bufferSize, VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | 
-        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
-        //Store the device address of the indirect buffer, so that any data passed along with it can be accessed in the shader
-        VkBufferDeviceAddressInfo allocatedBufferAddressInfo{};
-        allocatedBufferAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-        allocatedBufferAddressInfo.buffer = m_drawIndirectDataBuffer.buffer;
-        m_globalSceneData.indirectBufferAddress = vkGetBufferDeviceAddress(m_device, &allocatedBufferAddressInfo);
-
-        //Put the data on a staging buffer, to use it to transfer the data to the GPU buffer
-        AllocatedBuffer stagingBuffer;
-        AllocateBuffer(stagingBuffer, bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-        void* drawIndirectDataHolder = stagingBuffer.allocation->GetMappedData(); 
-        memcpy(drawIndirectDataHolder, dataToUpload.data(), bufferSize);
-
-        StartRecordingCommands();
-
-        VkBufferCopy2 copyBufferRegion{};
-        copyBufferRegion.sType = VK_STRUCTURE_TYPE_BUFFER_COPY_2;
-        copyBufferRegion.dstOffset = 0;
-        copyBufferRegion.srcOffset = 0;
-        copyBufferRegion.size = bufferSize;
-
-        VkCopyBufferInfo2 copyBufferInfo{};
-        copyBufferInfo.sType = VK_STRUCTURE_TYPE_COPY_BUFFER_INFO_2;
-        copyBufferInfo.dstBuffer = m_drawIndirectDataBuffer.buffer;
-        copyBufferInfo.srcBuffer = stagingBuffer.buffer;
-        copyBufferInfo.regionCount = 1;
-        copyBufferInfo.pRegions = &copyBufferRegion;
-        vkCmdCopyBuffer2(m_commands.commandBuffer, &copyBufferInfo);
+        //Specify the parts of the staging buffer that will be copied and into which parts of the indirect buffer
+        VkBufferCopy2 indirectBufferCopyRegion{};
+        indirectBufferCopyRegion.sType = VK_STRUCTURE_TYPE_BUFFER_COPY_2;
+        indirectBufferCopyRegion.size = indirectBufferSize;
+        indirectBufferCopyRegion.srcOffset = vertexBufferSize + indexBufferSize + materialBufferSize; 
+        indirectBufferCopyRegion.dstOffset = 0;
+        //Specify the two source and destination buffer and the region struct from above
+        VkCopyBufferInfo2 indirectBufferCopy{};
+        indirectBufferCopy.sType = VK_STRUCTURE_TYPE_COPY_BUFFER_INFO_2;
+        indirectBufferCopy.srcBuffer = stagingBuffer.buffer;
+        indirectBufferCopy.dstBuffer = m_drawIndirectCommandsBuffer.buffer;
+        indirectBufferCopy.regionCount = 1;
+        indirectBufferCopy.pRegions = &indirectBufferCopyRegion;
+        //Record the copy command
+        vkCmdCopyBuffer2(m_commands.commandBuffer, &indirectBufferCopy);
 
         SubmitCommands();
 
@@ -1500,8 +1490,8 @@ namespace BlitzenVulkan
             if(stats.drawIndirectMode)
             {
                 //This is just beatiful
-                vkCmdDrawIndexedIndirect(frameCommandBuffer, m_drawIndirectDataBuffer.buffer, 
-                offsetof(DrawIndirectData, indirectDraws), static_cast<uint32_t>(m_mainDrawContext.indirectData.size()), sizeof(DrawIndirectData));
+                vkCmdDrawIndexedIndirect(frameCommandBuffer, m_drawIndirectCommandsBuffer.buffer, offsetof(DrawIndirectCommand, indirectDraws), 
+                static_cast<uint32_t>(m_mainDrawContext.indirectCommands.size()), sizeof(DrawIndirectCommand));
             }
             //Go with the traditional method if draw indirect is inactive
             else
@@ -1667,7 +1657,7 @@ namespace BlitzenVulkan
         }
 
         #if BLITZEN_START_VULKAN_WITH_INDIRECT
-            vmaDestroyBuffer(m_allocator, m_drawIndirectDataBuffer.buffer, m_drawIndirectDataBuffer.allocation);
+            vmaDestroyBuffer(m_allocator, m_drawIndirectCommandsBuffer.buffer, m_drawIndirectCommandsBuffer.allocation);
         #endif
         vmaDestroyBuffer(m_allocator, m_globalMaterialConstantsBuffer.buffer, m_globalMaterialConstantsBuffer.allocation);
         vmaDestroyBuffer(m_allocator, m_globalIndexAndVertexBuffer.vertexBuffer.buffer, 

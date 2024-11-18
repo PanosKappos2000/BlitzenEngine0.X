@@ -90,6 +90,9 @@ namespace BlitzenVulkan
 
         DescriptorAllocator sceneDataDescriptroAllocator;
         AllocatedBuffer sceneDataUniformBuffer;
+        #if BLITZEN_START_VULKAN_WITH_INDIRECT
+            AllocatedBuffer indirectRenderObjectUniformBuffer;
+        #endif
 
         //#ifndef NDEBUG
             VkQueryPool timestampQueryPool;
@@ -150,11 +153,8 @@ namespace BlitzenVulkan
         void InitMainMaterialData();
 
         //Passes all the render data loaded from meshes, material and textures and passes them to global buffers
-        void UploadMeshBuffersToGPU(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices, 
-        std::vector<MaterialConstants>& materialConstants);
-
-        //Passes the vkCmdDrawIndexedIndirect commands and world matrix of all the objects in the draw context to m_drawIndirectDataBuffer
-        void UploadIndirectDrawBuffersToGPU(std::vector<DrawIndirectData>& dataToUpload);
+        void UploadGlobalBuffersToGPU(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices, 
+        std::vector<MaterialConstants>& materialConstants, std::vector<DrawIndirectCommand>& indirectCommands);
 
         //Passes the material data to the descriptor set for one material instance
         void WriteMaterialData(MaterialInstance& materialInstance, MaterialResources& materialResources, MaterialPass pass);
@@ -226,8 +226,8 @@ namespace BlitzenVulkan
 
         //Holds all the vertices and indices of every object in the world
         MeshBuffers m_globalIndexAndVertexBuffer;
-        //Holds all the vkDrawIndexedIndirectCommand, the objects' world matrix and the buffer that will be used for vkCmdDrawIndexedIndirect
-        AllocatedBuffer m_drawIndirectDataBuffer;
+        //Holds all the vkDrawIndexedIndirectCommand that will be used for the vkCmdDrawIndexedIndirect call
+        AllocatedBuffer m_drawIndirectCommandsBuffer;
         //Holds all the material constants (color factor, metal rough factor etc) that will be used in the scene
         AllocatedBuffer m_globalMaterialConstantsBuffer;
 

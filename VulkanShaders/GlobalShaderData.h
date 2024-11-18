@@ -1,15 +1,13 @@
 //The draw indirect buffer, is used to also pass the world matrix of each object, to it needs to be access inside the shader
-struct DrawIndirectData
+struct DrawIndirectCommands
 {
-    mat4 worldMatrix;
-
     //The VkDrawIndexedIndirectCommands are not needed inside the shader, so a placeholder value is put in its place
     float indirectCommands[5];
 };
 
 layout(buffer_reference, std430) readonly buffer IndirectDataBuffer
 {
-    DrawIndirectData indirectDraws[];
+    DrawIndirectCommands indirectDraws[];
 };
 
 struct Vertex
