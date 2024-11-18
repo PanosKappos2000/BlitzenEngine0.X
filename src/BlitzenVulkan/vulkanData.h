@@ -91,6 +91,8 @@ namespace BlitzenVulkan
         glm::mat4 projectionViewMatrix;
         //The scene data will be used to pass the vertex buffer address, this will probably need to be changed later
         VkDeviceAddress vertexBufferAddress; 
+        //The scene data will be used to pass the material constants buffer address, this will probably need to be changed later
+        VkDeviceAddress materialConstantsBufferAddress;
         //The scene data will be used to pass the indirect draw buffer address, this will probably need to be changed later
         VkDeviceAddress indirectBufferAddress;
     };
@@ -110,7 +112,9 @@ namespace BlitzenVulkan
 
     struct MaterialInstance
     {
-        VkDescriptorSet descriptorToBind;
+        //Used to index into the array of material constants that will be passed in the shaders as a storage buffer
+        uint32_t materialIndex;
+        //Used to bind the pipeline that will be used by a specific material
         MaterialPipeline* pPipeline;
         MaterialPass pass;
     };
@@ -142,14 +146,12 @@ namespace BlitzenVulkan
         VkDeviceAddress vertexBufferAddress;
     };
 
-    struct MaterialConstants
+    struct alignas(16) MaterialConstants
     {
         //How lighting should affect normal textures
 	    glm::vec4 colorFactors;
         //How lighting should affect textures with special metallic properties
 	    glm::vec4 metalRoughFactors;
-	    //padding, as this will be a uniform buffer
-	    glm::vec4 extra[14];
     };
 
     struct MaterialResources

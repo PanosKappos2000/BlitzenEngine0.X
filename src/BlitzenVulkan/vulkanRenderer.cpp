@@ -32,11 +32,14 @@ namespace BlitzenVulkan
 
         InitMainMaterialData();
 
-        //Temporarily holds all vertices and indices, once every scene and asset is loaded, it will all be uploaded in tounified buffer
+        //Temporarily holds all vertices, once every scene and asset is loaded, it will all be uploaded in a unified storage buffer
         std::vector<Vertex> vertices;
+        //Temporarily holds all indices, once every scene and asset is loaded, it will all be uploaded in a unified index buffer
         std::vector<uint32_t> indices;
+        //Temporarily holds all material constants, once every scene and asset is loaded, it will all be uploaded in a unified storage buffer
+        std::vector<MaterialConstants> materialConstants;
         std::string testScene = "Assets/structure.glb";
-        LoadScene(testScene, "structure", vertices, indices);
+        LoadScene(testScene, "structure", vertices, indices, materialConstants);
         //Update every node in the scene to be included in the draw context
         m_scenes["structure"].AddToDrawContext(glm::mat4(1.f), m_mainDrawContext);
         #ifdef NDEBUG
@@ -58,7 +61,7 @@ namespace BlitzenVulkan
         }
         #endif
         //Upload vertices and indices for all object to m_globalIndexAndVertexBuffer
-        UploadMeshBuffersToGPU(vertices, indices);
+        UploadMeshBuffersToGPU(vertices, indices, materialConstants);
         //Upload indirect draw commands and other draw indirect data to m_drawIndirectDataBuffer
         #if BLITZEN_START_VULKAN_WITH_INDIRECT
             UploadIndirectDrawBuffersToGPU(m_mainDrawContext.indirectData);
@@ -584,7 +587,7 @@ namespace BlitzenVulkan
         opaquePipelineBuilder.SetTriangleListInputAssembly();
         opaquePipelineBuilder.SetDynamicViewport();
         opaquePipelineBuilder.SetPolygonMode(VK_POLYGON_MODE_FILL);
-        opaquePipelineBuilder.SetPrimitiveCulling(VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE);
+        opaquePipelineBuilder.SetPrimitiveCulling(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE);
         opaquePipelineBuilder.DisableDepthBias();
         opaquePipelineBuilder.DisableDepthClamp();
         opaquePipelineBuilder.DisableMultisampling();
@@ -605,31 +608,23 @@ namespace BlitzenVulkan
         sceneDataDescriptorLayoutInfo.pBindings = &sceneDataDescriptorBinding;
         vkCreateDescriptorSetLayout(m_device, &sceneDataDescriptorLayoutInfo, nullptr, &m_globalSceneDescriptorSetLayout);
 
-        //Setting the binding for the material constants, that define how a surface should react to different effects
-        VkDescriptorSetLayoutBinding materialConstantsDescriptorBinding{};
-        materialConstantsDescriptorBinding.binding = 0;
-        materialConstantsDescriptorBinding.descriptorCount = 1;
-        materialConstantsDescriptorBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        materialConstantsDescriptorBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-
         //Setting the binding for the combined image sampler for the base color texture of a material
         VkDescriptorSetLayoutBinding materialBaseColorTextureBinding{};
-        materialBaseColorTextureBinding.binding = 1;
+        materialBaseColorTextureBinding.binding = 0;
         materialBaseColorTextureBinding.descriptorCount = 1;
         materialBaseColorTextureBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         materialBaseColorTextureBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 
         //Setting the binding for the combined image sampler for the metallic texture of a material
         VkDescriptorSetLayoutBinding materialMetallicTextureBinding{};
-        materialMetallicTextureBinding.binding = 2;
+        materialMetallicTextureBinding.binding = 1;
         materialMetallicTextureBinding.descriptorCount = 1;
         materialMetallicTextureBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         materialMetallicTextureBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 
         //Collecting all the material descriptor set layout bindings to pass to its layout
-        std::array<VkDescriptorSetLayoutBinding, 3> materialDescriptorSetLayoutBindings = 
+        std::array<VkDescriptorSetLayoutBinding, 2> materialDescriptorSetLayoutBindings = 
         {
-            materialConstantsDescriptorBinding,
             materialBaseColorTextureBinding,
             materialMetallicTextureBinding
         };
@@ -668,7 +663,7 @@ namespace BlitzenVulkan
             opaquePipelineBuilder.SetTriangleListInputAssembly();
             opaquePipelineBuilder.SetDynamicViewport();
             opaquePipelineBuilder.SetPolygonMode(VK_POLYGON_MODE_FILL);
-            opaquePipelineBuilder.SetPrimitiveCulling(VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE);
+            opaquePipelineBuilder.SetPrimitiveCulling(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE);
             opaquePipelineBuilder.DisableDepthBias();
             opaquePipelineBuilder.DisableDepthClamp();
             opaquePipelineBuilder.DisableMultisampling();
@@ -682,7 +677,8 @@ namespace BlitzenVulkan
         #endif
     }
 
-    void VulkanRenderer::UploadMeshBuffersToGPU(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices)
+    void VulkanRenderer::UploadMeshBuffersToGPU(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices, 
+    std::vector<MaterialConstants>& materialConstants)
     {
         //Allocates the vertex buffer as a storage buffer that can accept data transfers and can retrive a device address
         VkDeviceSize vertexBufferSize = static_cast<VkDeviceSize>(vertices.size() * sizeof(Vertex));
@@ -700,47 +696,79 @@ namespace BlitzenVulkan
         AllocateBuffer(m_globalIndexAndVertexBuffer.indexBuffer, indexBufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | 
         VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
 
-        //Since the index and vertex buffer memory is GPU only, a staging buffer is required to pass them the cpu data
-        AllocatedBuffer stagingBuffer;
-        AllocateBuffer(stagingBuffer, vertexBufferSize + indexBufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 
-        VMA_MEMORY_USAGE_CPU_TO_GPU);
-        void* vertexAndIndexBufferData = stagingBuffer.allocation->GetMappedData();
-        memcpy(vertexAndIndexBufferData, vertices.data(), static_cast<size_t>(vertexBufferSize));
-        memcpy(reinterpret_cast<char*>(vertexAndIndexBufferData) + static_cast<size_t>(vertexBufferSize), indices.data(), 
-        static_cast<size_t>(indexBufferSize));
+        //Allocates the buffer that will hold all the material constant data of the objects that have been loaded
+        VkDeviceSize materialBufferSize = static_cast<VkDeviceSize>(materialConstants.size() * sizeof(MaterialConstants));
+        AllocateBuffer(m_globalMaterialConstantsBuffer, materialBufferSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | 
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
 
-        //With the vertex buffer and index buffer allocated and the data copied to a staging buffer, copy commands can be recorded
+        //Store the address of the material buffer to the scene data so that it can be passed to the shaders every frame
+        VkBufferDeviceAddressInfo materialBufferAddressInfo{};
+        materialBufferAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+        materialBufferAddressInfo.buffer = m_globalMaterialConstantsBuffer.buffer;
+        m_globalSceneData.materialConstantsBufferAddress = vkGetBufferDeviceAddress(m_device, &materialBufferAddressInfo);
+
+        //Allocate a staging buffer to access the buffer data and copy it to the GPU buffers
+        AllocatedBuffer stagingBuffer;
+        AllocateBuffer(stagingBuffer, vertexBufferSize + indexBufferSize + materialBufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 
+        VMA_MEMORY_USAGE_CPU_TO_GPU);
+        void* allBuffersData = stagingBuffer.allocation->GetMappedData();
+        //Copy all the necessary data to the staging buffer at the right offsets
+        memcpy(allBuffersData, vertices.data(), static_cast<size_t>(vertexBufferSize));
+        memcpy(reinterpret_cast<char*>(allBuffersData) + static_cast<size_t>(vertexBufferSize), indices.data(), 
+        static_cast<size_t>(indexBufferSize));
+        memcpy(reinterpret_cast<char*>(allBuffersData) + static_cast<size_t>(vertexBufferSize + indexBufferSize), materialConstants.data(),
+        static_cast<size_t>(materialBufferSize));
+
+        //Start recording commands for copying the staging buffer into the GPU buffers
         StartRecordingCommands();
 
+        //Specify the parts of the staging buffer that will be copied and into which parts of the vertex buffer
         VkBufferCopy2 vertexBufferCopyRegion{};
         vertexBufferCopyRegion.sType = VK_STRUCTURE_TYPE_BUFFER_COPY_2;
         vertexBufferCopyRegion.size = vertexBufferSize;
         vertexBufferCopyRegion.srcOffset = 0;
         vertexBufferCopyRegion.dstOffset = 0;
-
+        //Specify the two source and destination buffer and the region struct from above
         VkCopyBufferInfo2 vertexBufferCopy{};
         vertexBufferCopy.sType = VK_STRUCTURE_TYPE_COPY_BUFFER_INFO_2;
         vertexBufferCopy.srcBuffer = stagingBuffer.buffer;
         vertexBufferCopy.dstBuffer = m_globalIndexAndVertexBuffer.vertexBuffer.buffer;
         vertexBufferCopy.regionCount = 1;
         vertexBufferCopy.pRegions = &vertexBufferCopyRegion;
-
+        //Record the copy command
         vkCmdCopyBuffer2(m_commands.commandBuffer, &vertexBufferCopy);
 
+        //Specify the parts of the staging buffer that will be copied and into which parts of the index buffer
         VkBufferCopy2 indexBufferCopyRegion{};
         indexBufferCopyRegion.sType = VK_STRUCTURE_TYPE_BUFFER_COPY_2;
         indexBufferCopyRegion.size = indexBufferSize;
         indexBufferCopyRegion.srcOffset = vertexBufferSize;
         indexBufferCopyRegion.dstOffset = 0;
-
+        //Specify the two source and destination buffer and the region struct from above
         VkCopyBufferInfo2 indexBufferCopy{};
         indexBufferCopy.sType = VK_STRUCTURE_TYPE_COPY_BUFFER_INFO_2;
         indexBufferCopy.srcBuffer = stagingBuffer.buffer;
         indexBufferCopy.dstBuffer = m_globalIndexAndVertexBuffer.indexBuffer.buffer;
         indexBufferCopy.regionCount = 1;
         indexBufferCopy.pRegions = &indexBufferCopyRegion;
-
+        //Record the copy command
         vkCmdCopyBuffer2(m_commands.commandBuffer, &indexBufferCopy);
+
+        //Specify the parts of the staging buffer that will be copied and into which parts of the material buffer
+        VkBufferCopy2 materialConstantsBufferCopyRegion{};
+        materialConstantsBufferCopyRegion.sType = VK_STRUCTURE_TYPE_BUFFER_COPY_2;
+        materialConstantsBufferCopyRegion.size = materialBufferSize;
+        materialConstantsBufferCopyRegion.srcOffset = vertexBufferSize + indexBufferSize;
+        materialConstantsBufferCopyRegion.dstOffset = 0;
+        //Specify the two source and destination buffer and the region struct from above
+        VkCopyBufferInfo2 materialConstantsBufferCopy{};
+        materialConstantsBufferCopy.sType = VK_STRUCTURE_TYPE_COPY_BUFFER_INFO_2;
+        materialConstantsBufferCopy.srcBuffer = stagingBuffer.buffer;
+        materialConstantsBufferCopy.dstBuffer = m_globalMaterialConstantsBuffer.buffer;
+        materialConstantsBufferCopy.regionCount = 1;
+        materialConstantsBufferCopy.pRegions = &materialConstantsBufferCopyRegion;
+        //Record the copy command
+        vkCmdCopyBuffer2(m_commands.commandBuffer, &materialConstantsBufferCopy);
 
         SubmitCommands();
 
@@ -801,22 +829,11 @@ namespace BlitzenVulkan
             //materialInstance.pPipeline->pipelineLayout = m_mainMaterialData.transparentPipeline.pipelineLayouts;
         }
 
-        std::array<VkWriteDescriptorSet, 3> descriptorWrites = {};
+        //std::array<VkWriteDescriptorSet, 2> descriptorWrites = {};
 
-        //Setting up a descriptor write on the buffer that stores material constants
-        VkDescriptorBufferInfo materialConstantsBufferInfo{};
-        materialConstantsBufferInfo.buffer = materialResources.dataBuffer;
-        materialConstantsBufferInfo.offset = materialResources.dataBufferOffset;
-        materialConstantsBufferInfo.range = sizeof(MaterialConstants);
-        descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        descriptorWrites[0].descriptorCount = 1;
-        descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        descriptorWrites[0].dstBinding = 0;
-        descriptorWrites[0].dstSet = materialInstance.descriptorToBind;
-        descriptorWrites[0].pBufferInfo = &materialConstantsBufferInfo;
-
+        //For now these descriptors are not necessary. It's possible that they will even be completely replaced
         //Setting up a descriptor write on the combined image sampler for the base color texture
-        VkDescriptorImageInfo baseColorTextureImageInfo{};
+        /*VkDescriptorImageInfo baseColorTextureImageInfo{};
         baseColorTextureImageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         baseColorTextureImageInfo.imageView = materialResources.colorImage.imageView;
         baseColorTextureImageInfo.sampler = materialResources.colorSampler;
@@ -837,14 +854,14 @@ namespace BlitzenVulkan
         descriptorWrites[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         descriptorWrites[2].dstBinding = 2;
         descriptorWrites[2].dstSet = materialInstance.descriptorToBind;
-        descriptorWrites[2].pImageInfo = &metalRoughTextureImageInfo;
+        descriptorWrites[2].pImageInfo = &metalRoughTextureImageInfo;*/
 
 
-        vkUpdateDescriptorSets(m_device, 3, descriptorWrites.data(), 0, nullptr);
+        //vkUpdateDescriptorSets(m_device, 2, descriptorWrites.data(), 0, nullptr);
     }
 
     void VulkanRenderer::LoadScene(std::string& filepath, const char* sceneName, std::vector<Vertex>& vertices, 
-    std::vector<uint32_t>& indices)
+    std::vector<uint32_t>& indices, std::vector<MaterialConstants>& materialConstants)
     {
         std::cout << "Loading GLTF: " << filepath << '\n';
 
@@ -1006,35 +1023,29 @@ namespace BlitzenVulkan
             
         }
 
-        //Allocate a buffer for material constants and resource and retrieve a pointer to its allocation
-        AllocateBuffer(scene.m_materialDataBuffer, sizeof(MaterialConstants) * gltf.materials.size(), 
-        VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-        //Will be used to iterate through the memory of the Material constants buffer
-        int materialDataIndex = 0;
-        MaterialConstants* pMaterialConstants = reinterpret_cast<MaterialConstants*>(scene.m_materialDataBuffer.allocationInfo.pMappedData);
-
+        size_t previousSize = materialConstants.size();
+        materialConstants.resize(materialConstants.size() + gltf.materials.size());
         /*Load materials*/
-        for(fastgltf::Material& gltfMaterial : gltf.materials)
+        for(size_t i = 0; i < gltf.materials.size(); ++i)
         {
             //Add a new entry in the materials of the scene and add a reference to it in the placeholder array
-            scene.m_materials[gltfMaterial.name.c_str()] = MaterialInstance();
-            materials.push_back(&(scene.m_materials[gltfMaterial.name.c_str()]));
+            scene.m_materials[gltf.materials[i].name.c_str()] = MaterialInstance();
+            materials.push_back(&(scene.m_materials[gltf.materials[i].name.c_str()]));
+            //Storing the index that will be passed to the shader to access the data of this material
+            materials.back()->materialIndex = static_cast<uint32_t>(previousSize + i);
 
-            MaterialConstants materialConstants;
             //Get the base color data of the material
-            materialConstants.colorFactors.x = gltfMaterial.pbrData.baseColorFactor[0];
-            materialConstants.colorFactors.y = gltfMaterial.pbrData.baseColorFactor[1];
-            materialConstants.colorFactors.z = gltfMaterial.pbrData.baseColorFactor[2];
-            materialConstants.colorFactors.w = gltfMaterial.pbrData.baseColorFactor[3];
+            materialConstants[i + previousSize].colorFactors.x = gltf.materials[i].pbrData.baseColorFactor[0];
+            materialConstants[i + previousSize].colorFactors.y = gltf.materials[i].pbrData.baseColorFactor[1];
+            materialConstants[i + previousSize].colorFactors.z = gltf.materials[i].pbrData.baseColorFactor[2];
+            materialConstants[i + previousSize].colorFactors.w = gltf.materials[i].pbrData.baseColorFactor[3];
             //Get the metallic and rough factors of the material
-            materialConstants.metalRoughFactors.x = gltfMaterial.pbrData.metallicFactor;
-            materialConstants.metalRoughFactors.y = gltfMaterial.pbrData.roughnessFactor;
-            //Pass all the data that was retrieved to the material buffer
-            pMaterialConstants[materialDataIndex] = materialConstants;
+            materialConstants[i + previousSize].metalRoughFactors.x = gltf.materials[i].pbrData.metallicFactor;
+            materialConstants[i + previousSize].metalRoughFactors.y = gltf.materials[i].pbrData.roughnessFactor;
 
             //Simple distinction between transparent and opaque objects, not doing anything with transparent materials for now
             MaterialPass passType = MaterialPass::Opaque;
-            if (gltfMaterial.alphaMode == fastgltf::AlphaMode::Blend)
+            if (gltf.materials[i].alphaMode == fastgltf::AlphaMode::Blend)
             {
                 passType = MaterialPass::Transparent;
             }
@@ -1046,16 +1057,12 @@ namespace BlitzenVulkan
             materialResources.metalRoughImage = m_placeholderGreyTexture;
             materialResources.metalRoughSampler = m_placeholderLinearSampler;
 
-            materialResources.dataBuffer = scene.m_materialDataBuffer.buffer;
-            //Getting the offset of the current material in the material buffer
-            materialResources.dataBufferOffset = materialDataIndex * sizeof(MaterialConstants);
-
-            if(gltfMaterial.pbrData.baseColorTexture.has_value())
+            if(gltf.materials[i].pbrData.baseColorTexture.has_value())
             {
                 //Get the index of the texture used by this material
-                size_t materialColorImageIndex = gltf.textures[gltfMaterial.pbrData.baseColorTexture.value().textureIndex].
+                size_t materialColorImageIndex = gltf.textures[gltf.materials[i].pbrData.baseColorTexture.value().textureIndex].
                 imageIndex.value();
-                size_t materialColorSamplerIndex = gltf.textures[gltfMaterial.pbrData.baseColorTexture.value().textureIndex].
+                size_t materialColorSamplerIndex = gltf.textures[gltf.materials[i].pbrData.baseColorTexture.value().textureIndex].
                 samplerIndex.value();
 
                 materialResources.colorImage = *textureImages[materialColorImageIndex];
@@ -1063,10 +1070,9 @@ namespace BlitzenVulkan
             }
 
             //Once all data has been retrieved, it can be passed to the descriptors
-            scene.m_descriptorAllocator.AllocateDescriptorSet(&(m_mainMaterialData.mainMaterialDescriptorSetLayout), 1, 
-            &(materials.back()->descriptorToBind));
-            WriteMaterialData(scene.m_materials[gltfMaterial.name.c_str()], materialResources, passType);
-            materialDataIndex++;
+            /*scene.m_descriptorAllocator.AllocateDescriptorSet(&(m_mainMaterialData.mainMaterialDescriptorSetLayout), 1, 
+            &(materials.back()->descriptorToBind));*/
+            WriteMaterialData(scene.m_materials[gltf.materials[i].name.c_str()], materialResources, passType);
         }
 
         //Start iterating through all the meshes that were loaded from gltf
@@ -1663,6 +1669,7 @@ namespace BlitzenVulkan
         #if BLITZEN_START_VULKAN_WITH_INDIRECT
             vmaDestroyBuffer(m_allocator, m_drawIndirectDataBuffer.buffer, m_drawIndirectDataBuffer.allocation);
         #endif
+        vmaDestroyBuffer(m_allocator, m_globalMaterialConstantsBuffer.buffer, m_globalMaterialConstantsBuffer.allocation);
         vmaDestroyBuffer(m_allocator, m_globalIndexAndVertexBuffer.vertexBuffer.buffer, 
         m_globalIndexAndVertexBuffer.vertexBuffer.allocation);
         vmaDestroyBuffer(m_allocator, m_globalIndexAndVertexBuffer.indexBuffer.buffer, 
