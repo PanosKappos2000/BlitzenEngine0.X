@@ -2,7 +2,7 @@
 #extension GL_EXT_buffer_reference : require
 #extension GL_GOOGLE_include_directive : require
 
-#include "InputStructures.glsl"
+#include "GlobalShaderData.h"
 
 layout(push_constant) uniform constants
 {

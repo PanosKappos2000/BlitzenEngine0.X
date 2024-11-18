@@ -4,7 +4,7 @@
 #extension GL_GOOGLE_include_directive : require
 #extension GL_ARB_shader_draw_parameters : require
 
-#include "InputStructures.glsl"
+#include "GlobalShaderData.h"
 
 layout(location = 0) out vec3 outColor;
 

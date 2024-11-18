@@ -64,8 +64,7 @@ set(GLSL_VALIDATOR "${PROJECT_SOURCE_DIR}/ExternalDependencies/Vulkan/Bin/glslan
   
   
   file(GLOB_RECURSE GLSL_SOURCE_FILES
-      "VulkanShaders/*.frag"
-      "VulkanShaders/*.vert"
+      "VulkanShaders/*.glsl"
       )
   
   foreach(GLSL ${GLSL_SOURCE_FILES})

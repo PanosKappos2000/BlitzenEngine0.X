@@ -582,8 +582,8 @@ namespace BlitzenVulkan
         opaquePipelineBuilder.Init(&m_device, &(m_mainMaterialData.opaquePipeline.pipelineLayout), 
         &(m_mainMaterialData.opaquePipeline.graphicsPipeline));
 
-        opaquePipelineBuilder.CreateShaderStage("VulkanShaders/MainGeometryShader.vert.spv", VK_SHADER_STAGE_VERTEX_BIT, "main");
-        opaquePipelineBuilder.CreateShaderStage("VulkanShaders/MainGeometryShader.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT, "main");
+        opaquePipelineBuilder.CreateShaderStage("VulkanShaders/MainGeometryShader.vert.glsl.spv", VK_SHADER_STAGE_VERTEX_BIT, "main");
+        opaquePipelineBuilder.CreateShaderStage("VulkanShaders/MainGeometryShader.frag.glsl.spv", VK_SHADER_STAGE_FRAGMENT_BIT, "main");
         opaquePipelineBuilder.SetTriangleListInputAssembly();
         opaquePipelineBuilder.SetDynamicViewport();
         opaquePipelineBuilder.SetPolygonMode(VK_POLYGON_MODE_FILL);
@@ -658,8 +658,8 @@ namespace BlitzenVulkan
             opaquePipelineBuilder.m_pGraphicsPipeline = &(m_mainMaterialData.indirectDrawOpaqueGraphicsPipeline);
             opaquePipelineBuilder.m_pLayout = &(m_mainMaterialData.globalIndirectDrawPipelineLayout);
 
-            opaquePipelineBuilder.CreateShaderStage("VulkanShaders/IndirectDrawShader.vert.spv", VK_SHADER_STAGE_VERTEX_BIT, "main");
-            opaquePipelineBuilder.CreateShaderStage("VulkanShaders/MainGeometryShader.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT, "main");
+            opaquePipelineBuilder.CreateShaderStage("VulkanShaders/IndirectDrawShader.vert.glsl.spv", VK_SHADER_STAGE_VERTEX_BIT, "main");
+            opaquePipelineBuilder.CreateShaderStage("VulkanShaders/MainGeometryShader.frag.glsl.spv", VK_SHADER_STAGE_FRAGMENT_BIT, "main");
             opaquePipelineBuilder.SetTriangleListInputAssembly();
             opaquePipelineBuilder.SetDynamicViewport();
             opaquePipelineBuilder.SetPolygonMode(VK_POLYGON_MODE_FILL);
@@ -1087,8 +1087,8 @@ namespace BlitzenVulkan
             {
                 //Add a new geoSurface object at the back of the mesh assets array and update its indices
                 meshAssets.back()->surfaces.push_back(GeoSurface());
-                meshAssets.back()->surfaces.back().firstIndex = indices.size();
-                meshAssets.back()->surfaces.back().indexCount = gltf.accessors[primitive.indicesAccessor.value()].count;
+                meshAssets.back()->surfaces.back().firstIndex = static_cast<uint32_t>(indices.size());
+                meshAssets.back()->surfaces.back().indexCount = static_cast<uint32_t>(gltf.accessors[primitive.indicesAccessor.value()].count);
 
                 size_t initialVertex = vertices.size();
 
@@ -1099,7 +1099,7 @@ namespace BlitzenVulkan
                 fastgltf::iterateAccessor<std::uint32_t>(gltf, indexaccessor,
                     [&](std::uint32_t idx) 
                     {
-                        indices.push_back(idx + initialVertex);
+                        indices.push_back(idx + static_cast<uint32_t>(initialVertex));
                     });
 
                 /* Load vertex positions */
@@ -1342,7 +1342,7 @@ namespace BlitzenVulkan
             double gpuEnd = static_cast<double>(queryResults[1]) * props.limits.timestampPeriod * 1e-6;
             double frameGPU = gpuEnd - gpuStart;
             char title[256];
-            sprintf(title, "GPU: %lf", frameGPU);
+            sprintf_s(title, "GPU: %lf", frameGPU);
             glfwSetWindowTitle(m_windowData.pWindow, title);
         //#endif
 
