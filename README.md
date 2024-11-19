@@ -3,7 +3,7 @@ The 0.X version started off from the same point that the 0.Alpha left off (that 
 but it now compiles as an excecutable instead of a static library. 
 
 It is now able to load and draw static gltf scenes like the 0.Alpha version, but it uses bindless resources for everything not just the vertex and index buffer. It also has 2 pipelines that can be switched on the fly.
-One uses the traditional vkCmdDrawIndexed with a for loop and uses push constants to access all bindless resources. The other uses one call to vkCmdDrawIndexedIndirect and accesses everything from with the shader.
+One uses the traditional vkCmdDrawIndexed with a for loop and uses push constants to access all bindless resources. The other uses one call to vkCmdDrawIndexedIndirect and accesses everything from within the shader.
 If BLITZEN_START_VULKAN_WITH_INDIRECT macro is defined as true, Blitzen can switch between the 2 modes by pressing tab. The next step is to add frustum culling to both pipelines. The indirect version will ready the commands 
 after doing frustum culling on a compute shader, while the other one might have to do it on the CPU. Eventually LODs and occlusion culling will be added which will complete the immediate goals of this version of the engine.
 
