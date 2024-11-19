@@ -28,18 +28,21 @@ namespace BlitzenVulkan
 
         InitPlaceholderTextures();
 
-        InitMainMaterialData();
-
         //Temporarily holds all vertices, once every scene and asset is loaded, it will all be uploaded in a unified storage buffer
         std::vector<Vertex> vertices;
         //Temporarily holds all indices, once every scene and asset is loaded, it will all be uploaded in a unified index buffer
         std::vector<uint32_t> indices;
         //Temporarily holds all material constants, once every scene and asset is loaded, it will all be uploaded in a unified storage buffer
         std::vector<MaterialConstants> materialConstants;
+        //Temporarily holds all material resources, once every scene and asset is loaded, it will all written to two uniform buffer arrays
+        std::vector<MaterialResources> materialResources;
         std::string testScene = "Assets/structure.glb";
-        LoadScene(testScene, "structure", vertices, indices, materialConstants);
+        std::string testScene2 = "Assets/city.glb";
+        LoadScene(testScene, "structure", vertices, indices, materialConstants, materialResources);
+        LoadScene(testScene2, "city", vertices, indices, materialConstants, materialResources);
         //Update every node in the scene to be included in the draw context
         m_scenes["structure"].AddToDrawContext(glm::mat4(1.f), m_mainDrawContext);
+        m_scenes["city"].AddToDrawContext(glm::translate(glm::mat4(1.f), glm::vec3(0.f, 0.f, -300.f)), m_mainDrawContext);
         #ifdef NDEBUG
         float iter = 1;
         for (float f = 0.f; f < 1.f; f += 0.1f)
@@ -59,6 +62,9 @@ namespace BlitzenVulkan
         }
         #endif
 
+        //This probably needs a better interface but it does its job for now
+        InitMainMaterialData(static_cast<uint32_t>(materialResources.size()));
+
         InitFrameTools();
         
         //Upload all global buffers to GPU, if indirect is acitve, it will also upload the indirect commands
@@ -68,6 +74,8 @@ namespace BlitzenVulkan
             std::vector<DrawIndirectCommand> emptyIndirect;
             UploadGlobalBuffersToGPU(vertices, indices, materialConstants, emptyIndirect);
         #endif
+        //Write all material resources to the global descriptor set
+        UploadMaterialResourcesToGPU(materialResources);
     }
 
     void VulkanRenderer::glfwWindowInit()
@@ -114,7 +122,10 @@ namespace BlitzenVulkan
         //Will allow us to create GPU pointers to access storage buffers
         vulkan12Features.bufferDeviceAddress = true;
         vulkan12Features.descriptorIndexing = true;
+        //Allows vulkan to reset queries
         vulkan12Features.hostQueryReset = true;
+        //Allows spir-v shaders to use descriptor arrays
+        vulkan12Features.runtimeDescriptorArray = true;
 
         VkPhysicalDeviceVulkan11Features vulkan11Features{};
         vulkan11Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
@@ -578,7 +589,7 @@ namespace BlitzenVulkan
         vkCreateSampler(m_device, &linearSamplerInfo, nullptr, &m_placeholderLinearSampler);
     }
 
-    void VulkanRenderer::InitMainMaterialData()
+    void VulkanRenderer::InitMainMaterialData(uint32_t materialDescriptorCount)
     {
         GraphicsPipelineBuilder opaquePipelineBuilder;
         opaquePipelineBuilder.Init(&m_device, &(m_mainMaterialData.opaquePipeline.pipelineLayout), 
@@ -613,14 +624,16 @@ namespace BlitzenVulkan
         //Setting the binding for the combined image sampler for the base color texture of a material
         VkDescriptorSetLayoutBinding materialBaseColorTextureBinding{};
         materialBaseColorTextureBinding.binding = 0;
-        materialBaseColorTextureBinding.descriptorCount = 1;
+        //After loading the scene, the amount of texture descriptors is known and is passed to the shader 
+        materialBaseColorTextureBinding.descriptorCount = materialDescriptorCount;
         materialBaseColorTextureBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         materialBaseColorTextureBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 
         //Setting the binding for the combined image sampler for the metallic texture of a material
         VkDescriptorSetLayoutBinding materialMetallicTextureBinding{};
         materialMetallicTextureBinding.binding = 1;
-        materialMetallicTextureBinding.descriptorCount = 1;
+        //After loading the scene, the amount of texture descriptors is known and is passed to the shader 
+        materialMetallicTextureBinding.descriptorCount = materialDescriptorCount;
         materialMetallicTextureBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         materialMetallicTextureBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 
@@ -672,8 +685,9 @@ namespace BlitzenVulkan
             opaquePipelineBuilder.EnableDefaultDepthTest();
             opaquePipelineBuilder.DisableColorBlending();
 
-            //The pipeline layout for indirect only uses the scene data descriptor set, to pass the scene data at the start of draw frame
-            opaquePipelineBuilder.CreatePipelineLayout(1, &m_globalSceneDescriptorSetLayout, 0, nullptr);
+            //The indirect pipeline does not use push constants since there will be very few draw calls each frame
+            opaquePipelineBuilder.CreatePipelineLayout(static_cast<uint32_t>(descriptorSetLayouts.size()), descriptorSetLayouts.data(), 
+            0, nullptr);
 
             opaquePipelineBuilder.Build();
         #endif
@@ -815,8 +829,7 @@ namespace BlitzenVulkan
         vmaDestroyBuffer(m_allocator, stagingBuffer.buffer, stagingBuffer.allocation);
     }
 
-    void VulkanRenderer::WriteMaterialData(MaterialInstance& materialInstance, MaterialResources& materialResources, 
-    MaterialPass pass)
+    void VulkanRenderer::WriteMaterialData(MaterialInstance& materialInstance, MaterialPass pass)
     {
         if(pass == MaterialPass::Opaque)
         {
@@ -861,8 +874,35 @@ namespace BlitzenVulkan
         //vkUpdateDescriptorSets(m_device, 2, descriptorWrites.data(), 0, nullptr);
     }
 
+    void VulkanRenderer::UploadMaterialResourcesToGPU(std::vector<MaterialResources>& materialResources)
+    {
+        //Allocate the descriptor set that will be used for material resource access
+        VkDescriptorPoolSize materialDescriptorPoolSize{};
+        materialDescriptorPoolSize.descriptorCount = 2;
+        materialDescriptorPoolSize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER; 
+        m_mainMaterialData.descriptorAllocator.Init(&m_device, 1, &materialDescriptorPoolSize);
+        m_mainMaterialData.descriptorAllocator.AllocateDescriptorSet(&(m_mainMaterialData.mainMaterialDescriptorSetLayout), 1, 
+        &m_mainMaterialData.mainMaterialDescriptorSet);
+
+        std::vector<VkDescriptorImageInfo> baseColorTextureImageInfos(materialResources.size());
+        for(size_t i = 0; i < materialResources.size(); ++i)
+        {
+            baseColorTextureImageInfos[i].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            baseColorTextureImageInfos[i].imageView = materialResources[i].colorImage.imageView;
+            baseColorTextureImageInfos[i].sampler = materialResources[i].colorSampler;
+        }
+        VkWriteDescriptorSet descriptorWrite{};
+        descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptorWrite.descriptorCount = static_cast<uint32_t>(materialResources.size());
+        descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        descriptorWrite.dstBinding = 0;
+        descriptorWrite.dstSet = m_mainMaterialData.mainMaterialDescriptorSet;
+        descriptorWrite.pImageInfo = baseColorTextureImageInfos.data();
+        vkUpdateDescriptorSets(m_device, 1, &descriptorWrite, 0, nullptr);
+    }
+
     void VulkanRenderer::LoadScene(std::string& filepath, const char* sceneName, std::vector<Vertex>& vertices, 
-    std::vector<uint32_t>& indices, std::vector<MaterialConstants>& materialConstants)
+    std::vector<uint32_t>& indices, std::vector<MaterialConstants>& materialConstants, std::vector<MaterialResources>& materialResources)
     {
         std::cout << "Loading GLTF: " << filepath << '\n';
 
@@ -919,16 +959,6 @@ namespace BlitzenVulkan
             std::cerr << "Failed to determine glTF container" << std::endl;
             return;
         }
-
-
-
-        //It is known that a material has 1 unifrom buffer descriptor for material constants and 2 combined image samplers for textures
-        std::array<VkDescriptorPoolSize, 2> materialDescriptorPoolSizes{};
-        materialDescriptorPoolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        materialDescriptorPoolSizes[0].descriptorCount = 1;
-        materialDescriptorPoolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        materialDescriptorPoolSizes[1].descriptorCount = 2;
-        scene.m_descriptorAllocator.Init(&m_device, 2, materialDescriptorPoolSizes.data());
 
 
         /*
@@ -1024,25 +1054,27 @@ namespace BlitzenVulkan
             
         }
 
-        size_t previousSize = materialConstants.size();
+        size_t previousMaterialsSize = materialConstants.size();
         materialConstants.resize(materialConstants.size() + gltf.materials.size());
+        materialResources.resize(materialResources.size() + gltf.materials.size());
+        materials.resize(gltf.materials.size());
         /*Load materials*/
         for(size_t i = 0; i < gltf.materials.size(); ++i)
         {
-            //Add a new entry in the materials of the scene and add a reference to it in the placeholder array
+            //Add a new entry in the materials of the scene and add a pointer to it in the placeholder array
             scene.m_materials[gltf.materials[i].name.c_str()] = MaterialInstance();
-            materials.push_back(&(scene.m_materials[gltf.materials[i].name.c_str()]));
+            materials[i] = &(scene.m_materials[gltf.materials[i].name.c_str()]);
             //Storing the index that will be passed to the shader to access the data of this material
-            materials.back()->materialIndex = static_cast<uint32_t>(previousSize + i);
+            materials[i]->materialIndex = static_cast<uint32_t>(previousMaterialsSize + i);
 
             //Get the base color data of the material
-            materialConstants[i + previousSize].colorFactors.x = gltf.materials[i].pbrData.baseColorFactor[0];
-            materialConstants[i + previousSize].colorFactors.y = gltf.materials[i].pbrData.baseColorFactor[1];
-            materialConstants[i + previousSize].colorFactors.z = gltf.materials[i].pbrData.baseColorFactor[2];
-            materialConstants[i + previousSize].colorFactors.w = gltf.materials[i].pbrData.baseColorFactor[3];
+            materialConstants[i + previousMaterialsSize].colorFactors.x = gltf.materials[i].pbrData.baseColorFactor[0];
+            materialConstants[i + previousMaterialsSize].colorFactors.y = gltf.materials[i].pbrData.baseColorFactor[1];
+            materialConstants[i + previousMaterialsSize].colorFactors.z = gltf.materials[i].pbrData.baseColorFactor[2];
+            materialConstants[i + previousMaterialsSize].colorFactors.w = gltf.materials[i].pbrData.baseColorFactor[3];
             //Get the metallic and rough factors of the material
-            materialConstants[i + previousSize].metalRoughFactors.x = gltf.materials[i].pbrData.metallicFactor;
-            materialConstants[i + previousSize].metalRoughFactors.y = gltf.materials[i].pbrData.roughnessFactor;
+            materialConstants[i + previousMaterialsSize].metalRoughFactors.x = gltf.materials[i].pbrData.metallicFactor;
+            materialConstants[i + previousMaterialsSize].metalRoughFactors.y = gltf.materials[i].pbrData.roughnessFactor;
 
             //Simple distinction between transparent and opaque objects, not doing anything with transparent materials for now
             MaterialPass passType = MaterialPass::Opaque;
@@ -1052,11 +1084,10 @@ namespace BlitzenVulkan
             }
        
             //Load placeholder resources for the material
-            MaterialResources materialResources;
-            materialResources.colorImage = m_placeholderGreyTexture;
-            materialResources.colorSampler = m_placeholderLinearSampler;
-            materialResources.metalRoughImage = m_placeholderGreyTexture;
-            materialResources.metalRoughSampler = m_placeholderLinearSampler;
+            materialResources[i + previousMaterialsSize].colorImage = m_placeholderGreyTexture;
+            materialResources[i + previousMaterialsSize].colorSampler = m_placeholderLinearSampler;
+            materialResources[i + previousMaterialsSize].metalRoughImage = m_placeholderGreyTexture;
+            materialResources[i + previousMaterialsSize].metalRoughSampler = m_placeholderLinearSampler;
 
             if(gltf.materials[i].pbrData.baseColorTexture.has_value())
             {
@@ -1066,14 +1097,12 @@ namespace BlitzenVulkan
                 size_t materialColorSamplerIndex = gltf.textures[gltf.materials[i].pbrData.baseColorTexture.value().textureIndex].
                 samplerIndex.value();
 
-                materialResources.colorImage = *textureImages[materialColorImageIndex];
-                materialResources.colorSampler = scene.m_samplers[materialColorSamplerIndex];
+                materialResources[i + previousMaterialsSize].colorImage = *textureImages[materialColorImageIndex];
+                materialResources[i + previousMaterialsSize].colorSampler = scene.m_samplers[materialColorSamplerIndex];
             }
 
-            //Once all data has been retrieved, it can be passed to the descriptors
-            /*scene.m_descriptorAllocator.AllocateDescriptorSet(&(m_mainMaterialData.mainMaterialDescriptorSetLayout), 1, 
-            &(materials.back()->descriptorToBind));*/
-            WriteMaterialData(scene.m_materials[gltf.materials[i].name.c_str()], materialResources, passType);
+            //This is an old function but I am keeping it because it gives each material their pipeline and I don't want to handle that now
+            WriteMaterialData(scene.m_materials[gltf.materials[i].name.c_str()], passType);
         }
 
         //Start iterating through all the meshes that were loaded from gltf
@@ -1461,16 +1490,18 @@ namespace BlitzenVulkan
             {
                 vkCmdBindPipeline(frameCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, 
                 m_mainMaterialData.indirectDrawOpaqueGraphicsPipeline);
+                VkDescriptorSet descriptorSetsToBind [2] = {sceneDataDescriptorSet, m_mainMaterialData.mainMaterialDescriptorSet};
                 vkCmdBindDescriptorSets(frameCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, 
-                m_mainMaterialData.globalIndirectDrawPipelineLayout, 0, 1, &sceneDataDescriptorSet, 0, nullptr);
+                m_mainMaterialData.globalIndirectDrawPipelineLayout, 0, 2, descriptorSetsToBind, 0, nullptr);
             }
             //Bind the pipeline and the global descriptor set for the traditional pipeline, if indirect is inactive
             else
             {
                 vkCmdBindPipeline(frameCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, 
                 m_mainMaterialData.opaquePipeline.graphicsPipeline);
+                VkDescriptorSet descriptorSetsToBind [2] = {sceneDataDescriptorSet, m_mainMaterialData.mainMaterialDescriptorSet};
                 vkCmdBindDescriptorSets(frameCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, 
-                m_mainMaterialData.opaquePipeline.pipelineLayout, 0, 1, &sceneDataDescriptorSet, 0, nullptr);
+                m_mainMaterialData.opaquePipeline.pipelineLayout, 0, 2, descriptorSetsToBind, 0, nullptr);
             }
         #else
             vkCmdBindPipeline(frameCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -1721,6 +1752,7 @@ namespace BlitzenVulkan
             vkDestroyPipeline(device, indirectDrawOpaqueGraphicsPipeline, nullptr);
             vkDestroyPipelineLayout(device, globalIndirectDrawPipelineLayout, nullptr);
         #endif
+        descriptorAllocator.CleanupResources();
         vkDestroyPipeline(device, opaquePipeline.graphicsPipeline, nullptr);
         vkDestroyPipelineLayout(device, opaquePipeline.pipelineLayout, nullptr);
         vkDestroyDescriptorSetLayout(device, mainMaterialDescriptorSetLayout, nullptr);

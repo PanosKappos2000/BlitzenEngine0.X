@@ -147,18 +147,20 @@ namespace BlitzenVulkan
         void InitPlaceholderTextures();
 
         //Creates some placeholder data for the pseudo material system
-        void InitMainMaterialData();
+        void InitMainMaterialData(uint32_t materialDescriptorCount);
 
         //Passes all the render data loaded from meshes, material and textures and passes them to global buffers
         void UploadGlobalBuffersToGPU(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices, 
         std::vector<MaterialConstants>& materialConstants, std::vector<DrawIndirectData>& indirectDrawData);
 
-        //Passes the material data to the descriptor set for one material instance
-        void WriteMaterialData(MaterialInstance& materialInstance, MaterialResources& materialResources, MaterialPass pass);
+        //Passes the material data to the descriptor set for one material instance(currently this only sets the pPipeline pointer in each material instance)
+        void WriteMaterialData(MaterialInstance& materialInstance, MaterialPass pass);
+        //Passes the material resources to the descriptor set that will allow access to them on the shader through render object index
+        void UploadMaterialResourcesToGPU(std::vector<MaterialResources>& materialResources);
 
         //Takes a filepath to a gltf scene and loads its data using fastglft library
         void LoadScene(std::string& filepath, const char* sceneName, std::vector<Vertex>& vertices, std::vector<uint32_t>& indices, 
-        std::vector<MaterialConstants>& MaterialConstants);
+        std::vector<MaterialConstants>& MaterialConstants, std::vector<MaterialResources>& resources);
         //Called from inside load scene, to load textures(uses stbi image)
         void LoadGltfImage(AllocatedImage& imageToLoad, fastgltf::Asset& gltfAsset, fastgltf::Image& gltfImage);
 

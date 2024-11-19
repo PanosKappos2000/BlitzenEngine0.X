@@ -74,8 +74,6 @@ namespace BlitzenVulkan
 
     void LoadedScene::ClearAll()
     {
-        m_descriptorAllocator.CleanupResources();
-
         vmaDestroyBuffer(m_pRenderer->m_allocator, m_materialDataBuffer.buffer, m_materialDataBuffer.allocation);
 
         for(auto& [name, texture] : m_textures)

@@ -158,6 +158,7 @@ namespace BlitzenVulkan
 	    glm::vec4 metalRoughFactors;
     };
 
+    //Used to write the data of textures used by materials into the uniform buffer arrays
     struct MaterialResources
     {
         //Holds the normal color part of the texture
@@ -168,10 +169,6 @@ namespace BlitzenVulkan
 	    AllocatedImage metalRoughImage;
         //Sampler for the above texture
 	    VkSampler metalRoughSampler;
-        //The data buffer where all uniform buffers descriptor will be written
-	    VkBuffer dataBuffer;
-        //The offset for this specific resource
-	    uint32_t dataBufferOffset;
     };
 
     //Holds material data, for the different types of materials that will be used by the renderer
@@ -180,7 +177,12 @@ namespace BlitzenVulkan
         MaterialPipeline opaquePipeline;
         MaterialPipeline transparentPipeline;
 
+        //The layout of the descriptor set used for all materials
         VkDescriptorSetLayout mainMaterialDescriptorSetLayout;
+        //Used to allocate the material descriptor set after loading all scenes and assets
+        DescriptorAllocator descriptorAllocator;
+        //The descriptor set that will be bound every frame before drawing
+        VkDescriptorSet mainMaterialDescriptorSet;
 
         #if BLITZEN_START_VULKAN_WITH_INDIRECT
             VkPipeline indirectDrawOpaqueGraphicsPipeline;
@@ -263,9 +265,6 @@ namespace BlitzenVulkan
 
         //Holds all the samplers used for the textures in a scene
         std::vector<VkSampler> m_samplers;
-
-        //Used to allocate all material descriptor sets in the scene
-        DescriptorAllocator m_descriptorAllocator;
 
         //Holds the uniform buffer used for material constants
         AllocatedBuffer m_materialDataBuffer;
