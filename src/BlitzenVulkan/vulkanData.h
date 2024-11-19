@@ -199,17 +199,15 @@ namespace BlitzenVulkan
         glm::mat4 modelMatrix;
     };
 
-    struct alignas(16) DrawIndirectCommand
+    //Holds the commands for a specific draw call with multi draw indirect and also some per draw data
+    struct alignas(16) DrawIndirectData
     {
-        VkDrawIndexedIndirectCommand indirectDraws;
-    };
-
-    struct alignas(16) IndirectRenderObject
-    {
-        //Will transform each vertex drawn by vkCmdDrawIndexedIndirect to world coordinates
+        //World matrix will be indexed inside the shader with gl_DrawIDARB
         glm::mat4 worldMatrix;
-        //Will index into the array of material constants
+        //Material index will be indexed inside the shader with gl_DrawIDARB and will return the material constant data
         uint32_t materialIndex;
+
+        VkDrawIndexedIndirectCommand indirectDraws;
     };
 
     struct DrawContext
@@ -218,8 +216,7 @@ namespace BlitzenVulkan
 
         //If Blitzen uses indirect commands, the draw context will include an array of draw indirect data
         #if BLITZEN_START_VULKAN_WITH_INDIRECT
-            std::vector<DrawIndirectCommand> indirectCommands;
-            std::vector<IndirectRenderObject> indirectRenderObjects;
+            std::vector<DrawIndirectData> indirectDrawData;
         #endif
     };
 

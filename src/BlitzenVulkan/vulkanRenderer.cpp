@@ -26,8 +26,6 @@ namespace BlitzenVulkan
         m_drawExtent.width = m_windowData.width;
         m_drawExtent.height = m_windowData.height;
 
-        InitFrameTools();
-
         InitPlaceholderTextures();
 
         InitMainMaterialData();
@@ -60,11 +58,12 @@ namespace BlitzenVulkan
             m_scenes["structure"].AddToDrawContext(glm::translate(glm::mat4(1.f), glm::vec3(f, -iter, iter)), m_mainDrawContext);
         }
         #endif
-        //Upload vertices and indices for all object to m_globalIndexAndVertexBuffer
+
+        InitFrameTools();
         
-        //Upload indirect draw commands and other draw indirect data to m_drawIndirectDataBuffer
+        //Upload all global buffers to GPU, if indirect is acitve, it will also upload the indirect commands
         #if BLITZEN_START_VULKAN_WITH_INDIRECT
-            UploadGlobalBuffersToGPU(vertices, indices, materialConstants, m_mainDrawContext.indirectCommands);
+            UploadGlobalBuffersToGPU(vertices, indices, materialConstants, m_mainDrawContext.indirectDrawData);
         #else
             std::vector<DrawIndirectCommand> emptyIndirect;
             UploadGlobalBuffersToGPU(vertices, indices, materialConstants, emptyIndirect);
@@ -590,7 +589,7 @@ namespace BlitzenVulkan
         opaquePipelineBuilder.SetTriangleListInputAssembly();
         opaquePipelineBuilder.SetDynamicViewport();
         opaquePipelineBuilder.SetPolygonMode(VK_POLYGON_MODE_FILL);
-        opaquePipelineBuilder.SetPrimitiveCulling(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE);
+        opaquePipelineBuilder.SetPrimitiveCulling(VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE);
         opaquePipelineBuilder.DisableDepthBias();
         opaquePipelineBuilder.DisableDepthClamp();
         opaquePipelineBuilder.DisableMultisampling();
@@ -666,7 +665,7 @@ namespace BlitzenVulkan
             opaquePipelineBuilder.SetTriangleListInputAssembly();
             opaquePipelineBuilder.SetDynamicViewport();
             opaquePipelineBuilder.SetPolygonMode(VK_POLYGON_MODE_FILL);
-            opaquePipelineBuilder.SetPrimitiveCulling(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE);
+            opaquePipelineBuilder.SetPrimitiveCulling(VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE);
             opaquePipelineBuilder.DisableDepthBias();
             opaquePipelineBuilder.DisableDepthClamp();
             opaquePipelineBuilder.DisableMultisampling();
@@ -681,7 +680,7 @@ namespace BlitzenVulkan
     }
 
     void VulkanRenderer::UploadGlobalBuffersToGPU(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices, 
-    std::vector<MaterialConstants>& materialConstants, std::vector<DrawIndirectCommand>& drawIndirectCommands)
+    std::vector<MaterialConstants>& materialConstants, std::vector<DrawIndirectData>& drawIndirectCommands)
     {
         //Allocates the vertex buffer as a storage buffer that can accept data transfers and can retrive a device address
         VkDeviceSize vertexBufferSize = static_cast<VkDeviceSize>(vertices.size() * sizeof(Vertex));
@@ -708,20 +707,28 @@ namespace BlitzenVulkan
         materialBufferAddressInfo.buffer = m_globalMaterialConstantsBuffer.buffer;
         m_globalSceneData.materialConstantsBufferAddress = vkGetBufferDeviceAddress(m_device, &materialBufferAddressInfo);
 
-        //Allocate the buffer that will hold the indirect commands 
-        VkDeviceSize indirectBufferSize = sizeof(DrawIndirectCommand) * drawIndirectCommands.size();
-        AllocateBuffer(m_drawIndirectCommandsBuffer, indirectBufferSize, VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | 
-        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
-        //Store the device address of the indirect buffer, so that it can be passed to the shaders every frame
-        VkBufferDeviceAddressInfo allocatedBufferAddressInfo{};
-        allocatedBufferAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-        allocatedBufferAddressInfo.buffer = m_drawIndirectCommandsBuffer.buffer;
-        m_globalSceneData.indirectBufferAddress = vkGetBufferDeviceAddress(m_device, &allocatedBufferAddressInfo);
+        #if BLITZEN_START_VULKAN_WITH_INDIRECT
+            //Allocate the buffer that will hold the indirect commands 
+            VkDeviceSize indirectBufferSize = sizeof(DrawIndirectData) * drawIndirectCommands.size();
+            AllocateBuffer(m_drawIndirectDataBuffer, indirectBufferSize, VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | 
+            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, 
+            VMA_MEMORY_USAGE_GPU_ONLY);
+            //Store the device address of the indirect buffer, so that it can be passed to the shaders every frame
+            VkBufferDeviceAddressInfo allocatedBufferAddressInfo{};
+            allocatedBufferAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+            allocatedBufferAddressInfo.buffer = m_drawIndirectDataBuffer.buffer;
+            m_globalSceneData.indirectBufferAddress = vkGetBufferDeviceAddress(m_device, &allocatedBufferAddressInfo);
+        #endif
 
         //Allocate a staging buffer to access the buffer data and copy it to the GPU buffers
         AllocatedBuffer stagingBuffer;
-        AllocateBuffer(stagingBuffer, vertexBufferSize + indexBufferSize + materialBufferSize + indirectBufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 
-        VMA_MEMORY_USAGE_CPU_TO_GPU);
+        #if BLITZEN_START_VULKAN_WITH_INDIRECT
+            AllocateBuffer(stagingBuffer, vertexBufferSize + indexBufferSize + materialBufferSize + indirectBufferSize, 
+            VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+        #else
+            AllocateBuffer(stagingBuffer, vertexBufferSize + indexBufferSize + materialBufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+            VMA_MEMORY_USAGE_CPU_TO_GPU);
+        #endif
         void* allBuffersData = stagingBuffer.allocation->GetMappedData();
         //Copy all the necessary data to the staging buffer at the right offsets
         memcpy(allBuffersData, vertices.data(), static_cast<size_t>(vertexBufferSize));
@@ -729,8 +736,10 @@ namespace BlitzenVulkan
         static_cast<size_t>(indexBufferSize));
         memcpy(reinterpret_cast<char*>(allBuffersData) + static_cast<size_t>(vertexBufferSize + indexBufferSize), materialConstants.data(),
         static_cast<size_t>(materialBufferSize));
-        memcpy(reinterpret_cast<char*>(allBuffersData) + static_cast<size_t>(vertexBufferSize + indexBufferSize + materialBufferSize), 
-        drawIndirectCommands.data(), static_cast<size_t>(indirectBufferSize));
+        #if BLITZEN_START_VULKAN_WITH_INDIRECT
+            memcpy(reinterpret_cast<char*>(allBuffersData) + static_cast<size_t>(vertexBufferSize + indexBufferSize + materialBufferSize), 
+            drawIndirectCommands.data(), static_cast<size_t>(indirectBufferSize));
+        #endif
 
         //Start recording commands for copying the staging buffer into the GPU buffers
         StartRecordingCommands();
@@ -783,21 +792,23 @@ namespace BlitzenVulkan
         //Record the copy command
         vkCmdCopyBuffer2(m_commands.commandBuffer, &materialConstantsBufferCopy);
 
-        //Specify the parts of the staging buffer that will be copied and into which parts of the indirect buffer
-        VkBufferCopy2 indirectBufferCopyRegion{};
-        indirectBufferCopyRegion.sType = VK_STRUCTURE_TYPE_BUFFER_COPY_2;
-        indirectBufferCopyRegion.size = indirectBufferSize;
-        indirectBufferCopyRegion.srcOffset = vertexBufferSize + indexBufferSize + materialBufferSize; 
-        indirectBufferCopyRegion.dstOffset = 0;
-        //Specify the two source and destination buffer and the region struct from above
-        VkCopyBufferInfo2 indirectBufferCopy{};
-        indirectBufferCopy.sType = VK_STRUCTURE_TYPE_COPY_BUFFER_INFO_2;
-        indirectBufferCopy.srcBuffer = stagingBuffer.buffer;
-        indirectBufferCopy.dstBuffer = m_drawIndirectCommandsBuffer.buffer;
-        indirectBufferCopy.regionCount = 1;
-        indirectBufferCopy.pRegions = &indirectBufferCopyRegion;
-        //Record the copy command
-        vkCmdCopyBuffer2(m_commands.commandBuffer, &indirectBufferCopy);
+        #if BLITZEN_START_VULKAN_WITH_INDIRECT
+            //Specify the parts of the staging buffer that will be copied and into which parts of the indirect buffer
+            VkBufferCopy2 indirectBufferCopyRegion{};
+            indirectBufferCopyRegion.sType = VK_STRUCTURE_TYPE_BUFFER_COPY_2;
+            indirectBufferCopyRegion.size = indirectBufferSize;
+            indirectBufferCopyRegion.srcOffset = vertexBufferSize + indexBufferSize + materialBufferSize; 
+            indirectBufferCopyRegion.dstOffset = 0;
+            //Specify the two source and destination buffer and the region struct from above
+            VkCopyBufferInfo2 indirectBufferCopy{};
+            indirectBufferCopy.sType = VK_STRUCTURE_TYPE_COPY_BUFFER_INFO_2;
+            indirectBufferCopy.srcBuffer = stagingBuffer.buffer;
+            indirectBufferCopy.dstBuffer = m_drawIndirectDataBuffer.buffer;
+            indirectBufferCopy.regionCount = 1;
+            indirectBufferCopy.pRegions = &indirectBufferCopyRegion;
+            //Record the copy command
+            vkCmdCopyBuffer2(m_commands.commandBuffer, &indirectBufferCopy);
+        #endif
 
         SubmitCommands();
 
@@ -1339,6 +1350,7 @@ namespace BlitzenVulkan
 
         //Passing global scene data to the shaders
         m_frameTools[m_currentFrame].sceneDataDescriptroAllocator.ResetDescriptorPools();
+        //Write the new data in the scene data struct to the buffer's memory
         SceneData* pSceneData = reinterpret_cast<SceneData*>(m_frameTools[m_currentFrame].
         sceneDataUniformBuffer.allocation->GetMappedData());
         *pSceneData = m_globalSceneData;
@@ -1490,8 +1502,8 @@ namespace BlitzenVulkan
             if(stats.drawIndirectMode)
             {
                 //This is just beatiful
-                vkCmdDrawIndexedIndirect(frameCommandBuffer, m_drawIndirectCommandsBuffer.buffer, offsetof(DrawIndirectCommand, indirectDraws), 
-                static_cast<uint32_t>(m_mainDrawContext.indirectCommands.size()), sizeof(DrawIndirectCommand));
+                vkCmdDrawIndexedIndirect(frameCommandBuffer, m_drawIndirectDataBuffer.buffer, offsetof(DrawIndirectData, indirectDraws), 
+                static_cast<uint32_t>(m_mainDrawContext.indirectDrawData.size()), sizeof(DrawIndirectData));
             }
             //Go with the traditional method if draw indirect is inactive
             else
@@ -1657,7 +1669,7 @@ namespace BlitzenVulkan
         }
 
         #if BLITZEN_START_VULKAN_WITH_INDIRECT
-            vmaDestroyBuffer(m_allocator, m_drawIndirectCommandsBuffer.buffer, m_drawIndirectCommandsBuffer.allocation);
+            vmaDestroyBuffer(m_allocator, m_drawIndirectDataBuffer.buffer, m_drawIndirectDataBuffer.allocation);
         #endif
         vmaDestroyBuffer(m_allocator, m_globalMaterialConstantsBuffer.buffer, m_globalMaterialConstantsBuffer.allocation);
         vmaDestroyBuffer(m_allocator, m_globalIndexAndVertexBuffer.vertexBuffer.buffer, 

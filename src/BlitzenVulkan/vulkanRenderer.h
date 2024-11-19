@@ -90,9 +90,6 @@ namespace BlitzenVulkan
 
         DescriptorAllocator sceneDataDescriptroAllocator;
         AllocatedBuffer sceneDataUniformBuffer;
-        #if BLITZEN_START_VULKAN_WITH_INDIRECT
-            AllocatedBuffer indirectRenderObjectUniformBuffer;
-        #endif
 
         //#ifndef NDEBUG
             VkQueryPool timestampQueryPool;
@@ -154,7 +151,7 @@ namespace BlitzenVulkan
 
         //Passes all the render data loaded from meshes, material and textures and passes them to global buffers
         void UploadGlobalBuffersToGPU(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices, 
-        std::vector<MaterialConstants>& materialConstants, std::vector<DrawIndirectCommand>& indirectCommands);
+        std::vector<MaterialConstants>& materialConstants, std::vector<DrawIndirectData>& indirectDrawData);
 
         //Passes the material data to the descriptor set for one material instance
         void WriteMaterialData(MaterialInstance& materialInstance, MaterialResources& materialResources, MaterialPass pass);
@@ -222,12 +219,13 @@ namespace BlitzenVulkan
 
         //Global scene data that will be uploaded to the shaders once at the start of each frame
         SceneData m_globalSceneData;
+        //The descriptor set layout of the global scene data needs to be saved so that the descriptor set can be allocated each frame
         VkDescriptorSetLayout m_globalSceneDescriptorSetLayout;
 
         //Holds all the vertices and indices of every object in the world
         MeshBuffers m_globalIndexAndVertexBuffer;
         //Holds all the vkDrawIndexedIndirectCommand that will be used for the vkCmdDrawIndexedIndirect call
-        AllocatedBuffer m_drawIndirectCommandsBuffer;
+        AllocatedBuffer m_drawIndirectDataBuffer;
         //Holds all the material constants (color factor, metal rough factor etc) that will be used in the scene
         AllocatedBuffer m_globalMaterialConstantsBuffer;
 
