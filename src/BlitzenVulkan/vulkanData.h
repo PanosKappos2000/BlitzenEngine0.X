@@ -134,9 +134,13 @@ namespace BlitzenVulkan
         std::string assetName;
     };
 
-    struct ModelMatrixPushConstant
+    //For every draw call in the non indirect pipeline, this will pass some per surface data
+    struct alignas(16) DrawDataPushConstant
     {
+        //The transform of a mesh, will transform every vertex to world coordinates
         glm::mat4 modelMatrix;
+        //The material index which will indexes into the material constants used for a specific surface
+        uint32_t materialIndex;
     };
 
     struct MeshBuffers

@@ -647,7 +647,7 @@ namespace BlitzenVulkan
         //Setting the push constant that will be passed to the shader for every object to specify their model matrix
         VkPushConstantRange pushConstants{};
         pushConstants.offset = 0;
-        pushConstants.size = sizeof(ModelMatrixPushConstant);
+        pushConstants.size = sizeof(DrawDataPushConstant);
         pushConstants.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
         opaquePipelineBuilder.CreatePipelineLayout(static_cast<uint32_t>(descriptorSetLayouts.size()), descriptorSetLayouts.data(), 
@@ -1511,12 +1511,13 @@ namespace BlitzenVulkan
                 for(size_t i = 0; i < m_mainDrawContext.opaqueRenderObjects.size(); ++i)
                 {
                     //The model/surface that is currently being worked on
-                        RenderObject& opaque = m_mainDrawContext.opaqueRenderObjects[i];
+                    RenderObject& opaque = m_mainDrawContext.opaqueRenderObjects[i];
 
-                    ModelMatrixPushConstant pushConstant;
+                    DrawDataPushConstant pushConstant;
                     pushConstant.modelMatrix = opaque.modelMatrix;
+                    pushConstant.materialIndex = opaque.pMaterial->materialIndex;
                     vkCmdPushConstants(frameCommandBuffer, opaque.pMaterial->pPipeline->pipelineLayout, 
-                    VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(ModelMatrixPushConstant), &pushConstant);
+                    VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(DrawDataPushConstant), &pushConstant);
                     vkCmdDrawIndexed(frameCommandBuffer, opaque.indexCount, 1, opaque.firstIndex, 0, 0);
                 }
             }
