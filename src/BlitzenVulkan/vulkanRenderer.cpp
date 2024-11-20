@@ -658,7 +658,7 @@ namespace BlitzenVulkan
         VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
         //Setting the binding for the combined image sampler for the metallic texture of a material
         VkDescriptorSetLayoutBinding materialMetallicTextureBinding{};
-        CreateDescriptorSetLayoutBinding(materialBaseColorTextureBinding, 1, materialDescriptorCount, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 
+        CreateDescriptorSetLayoutBinding(materialMetallicTextureBinding, 1, materialDescriptorCount, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
         VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
         //Collecting all the material descriptor set layout bindings to pass to its layout
         std::array<VkDescriptorSetLayoutBinding, 2> materialDescriptorSetLayoutBindings = 
