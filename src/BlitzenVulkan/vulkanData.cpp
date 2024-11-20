@@ -28,6 +28,7 @@ namespace BlitzenVulkan
             //If vulkan is going to need draw indirect during runtime, for each surface in the mesh there needs to be a draw indirect command
             #if BLITZEN_START_VULKAN_WITH_INDIRECT
                 drawContext.indirectDrawData.resize(drawContext.opaqueRenderObjects.size());
+                drawContext.surfaceFrustumCollisions.resize(drawContext.opaqueRenderObjects.size());
             #endif
             for(size_t i = startIndex; i < drawContext.opaqueRenderObjects.size(); ++i)
             {
@@ -53,6 +54,8 @@ namespace BlitzenVulkan
                     //Update object data so that it can be drawn properly from with the shader
                     drawContext.indirectDrawData[i].worldMatrix = finalMatrix;
                     drawContext.indirectDrawData[i].materialIndex = currentSurface.pMaterial->materialIndex;
+                    drawContext.surfaceFrustumCollisions[i].center = currentSurface.center;
+                    drawContext.surfaceFrustumCollisions[i].radius = currentSurface.radius;
                 #endif
             }
         }

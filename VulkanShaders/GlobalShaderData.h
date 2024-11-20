@@ -1,4 +1,4 @@
-//The draw indirect buffer, is used to also pass the world matrix of each object, to it needs to be access inside the shader
+//The draw indirect buffer, is also used to pass some constant per surface data
 struct IndirectDrawData
 {
     mat4 worldMatrix;
@@ -38,6 +38,17 @@ layout(buffer_reference, std430) readonly buffer MaterialConstantsBuffer
     MaterialConstants materialConstants[];
 };
 
+struct FrustumCollisionData
+{
+    vec3 center;
+    float radius;
+};
+
+layout(buffer_reference, std430) readonly buffer FrustumCollisionDataBuffer
+{
+    FrustumCollisionData frustumCollisions[];
+};
+
 layout(set = 0, binding = 0) uniform SceneData
 {
     vec4 sunlightColor;
@@ -52,4 +63,7 @@ layout(set = 0, binding = 0) uniform SceneData
     MaterialConstantsBuffer materialConstantsBuffer;
     //The scene data will be used to pass the indirect buffer address, this will probably need to be changed later
     IndirectDataBuffer indirectDataBuffer;
+    //The scene data will be used to pass the frustum collision buffer address, this will probably need to be changed later
+    FrustumCollisionDataBuffer frustCollisionDataBuffer;
+
 }sceneData;

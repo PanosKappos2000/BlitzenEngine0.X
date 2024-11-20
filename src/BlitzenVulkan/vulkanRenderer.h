@@ -91,6 +91,10 @@ namespace BlitzenVulkan
         DescriptorAllocator sceneDataDescriptroAllocator;
         AllocatedBuffer sceneDataUniformBuffer;
 
+        #if BLITZEN_START_VULKAN_WITH_INDIRECT
+            AllocatedBuffer indirectFrustumDataUniformBuffer;
+        #endif
+
         //#ifndef NDEBUG
             VkQueryPool timestampQueryPool;
         //#endif
@@ -238,6 +242,7 @@ namespace BlitzenVulkan
         AllocatedBuffer m_drawIndirectDataBuffer;
         //Holds all the material constants (color factor, metal rough factor etc) that will be used in the scene
         AllocatedBuffer m_globalMaterialConstantsBuffer;
+        AllocatedBuffer m_surfaceFrustumCollisionBuffer;
 
         //Holds all the scenes that have been loaded from a glb file
         std::unordered_map<std::string, LoadedScene> m_scenes;

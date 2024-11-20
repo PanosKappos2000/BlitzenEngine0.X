@@ -8,6 +8,9 @@
 
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
+#include <glm/vec3.hpp>
+#include <glm/vec4.hpp>
+#include <glm/mat4x4.hpp>
 #include "glm/gtx/transform.hpp"
 #include "glm/gtx/quaternion.hpp"
 
@@ -95,6 +98,8 @@ namespace BlitzenVulkan
         VkDeviceAddress materialConstantsBufferAddress;
         //The scene data will be used to pass the indirect draw buffer address, this will probably need to be changed later
         VkDeviceAddress indirectBufferAddress;
+        //The scene data will be used to pass the frustum collision buffer address, this will probably need to be changed later
+        VkDeviceAddress frustumCollisionBufferAddress;
     };
 
     struct MaterialPipeline
@@ -114,6 +119,7 @@ namespace BlitzenVulkan
     {
         //Used to index into the array of material constants that will be passed in the shaders as a storage buffer
         uint32_t materialIndex;
+
         //Used to bind the pipeline that will be used by a specific material
         MaterialPipeline* pPipeline;
         MaterialPass pass;
@@ -122,10 +128,15 @@ namespace BlitzenVulkan
     //Used to represent each surface of a mesh. The firstIndex and indexCount are used for vkCmdDrawIndexed
     struct GeoSurface
     {
+        //Used to draw each vertex of a surface(will be passed to vkCmdDrawIndexed or to an indirect command buffer)
         uint32_t firstIndex;
         uint32_t indexCount;
 
         MaterialInstance* pMaterial;
+
+        //Data used for frustum culling
+        glm::vec3 center = glm::vec3(0);
+        float radius = 0;
     };
 
     struct MeshAsset
@@ -203,6 +214,11 @@ namespace BlitzenVulkan
 
         //This specifies the model matrix with which
         glm::mat4 modelMatrix;
+
+        //Saves data used for frustum culling
+        glm::vec3 center;
+        //Saves data used for frustum culling
+        float radius;
     };
 
     //Holds the commands for a specific draw call with multi draw indirect and also some per draw data
@@ -216,6 +232,12 @@ namespace BlitzenVulkan
         VkDrawIndexedIndirectCommand indirectDraws;
     };
 
+    struct alignas(16) FrustumCollisionData
+    {
+        glm::vec3 center;
+        float radius;
+    };
+
     struct DrawContext
     {
         std::vector<RenderObject> opaqueRenderObjects;
@@ -223,13 +245,14 @@ namespace BlitzenVulkan
         //If Blitzen uses indirect commands, the draw context will include an array of draw indirect data
         #if BLITZEN_START_VULKAN_WITH_INDIRECT
             std::vector<DrawIndirectData> indirectDrawData;
+            std::vector<FrustumCollisionData> surfaceFrustumCollisions;
         #endif
     };
 
     struct VulkanStats
     {
         #if BLITZEN_START_VULKAN_WITH_INDIRECT
-            bool drawIndirectMode = true;
+            bool drawIndirectMode = false;
         #endif
     };
 
