@@ -146,6 +146,9 @@ namespace BlitzenVulkan
         //Creates some basic textures to use when texture loading is sketchy
         void InitPlaceholderTextures();
 
+        //Creates compute pipelines that the graphics pipeline will depend on for specific work
+        void InitComputePipelines();
+
         //Creates some placeholder data for the pseudo material system
         void InitMainMaterialData(uint32_t materialDescriptorCount);
 
@@ -215,6 +218,11 @@ namespace BlitzenVulkan
         AllocatedImage m_placeholderErrorTexture;
         VkSampler m_placeholderLinearSampler;
         VkSampler m_placeholderNearestSampler;
+
+        //Binds a pipeline which will be responsible for fustrum culling and readying the indirect commands
+        #if BLITZEN_START_VULKAN_WITH_INDIRECT
+            ComputePipelineData m_indirectCullingComputePipelineData;
+        #endif
 
         //Holds the pipelines used for each material instance and other data
         GlobalMaterialData m_mainMaterialData;

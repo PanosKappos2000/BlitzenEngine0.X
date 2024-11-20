@@ -6,7 +6,7 @@
 
 #include "GlobalShaderData.h"
 
-//The fragment shader needs to be provided with the right material
+//The fragment shader needs to be provided with the right material(what a strange way to phrase it, I'll leave it here)
 layout(location = 0) out vec3 outColor;
 layout(location = 1) out vec2 outUvMap;
 layout(location = 2) out flat uint outMaterialIndex;

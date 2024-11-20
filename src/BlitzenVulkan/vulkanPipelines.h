@@ -15,7 +15,7 @@ namespace BlitzenVulkan
         void Build();
 
         //Reads the shader code found in a file and assigns it to the specified shader stage
-        void CreateShaderStage(const char* filepath, VkShaderStageFlagBits shaderStage, const char* entryPointerName);
+        void CreateShaderStage(const char* filepath, VkShaderStageFlagBits shaderStage, const char* entryPointName);
 
         void SetTriangleListInputAssembly();
 
@@ -32,9 +32,6 @@ namespace BlitzenVulkan
         void EnableDefaultDepthTest();
 
         void DisableColorBlending();
-
-        void CreatePipelineLayout(uint32_t descriptorSetLayoutCount, VkDescriptorSetLayout* pDescriptorSetLayouts, uint32_t pushConstantRangeCount, 
-        VkPushConstantRange* pPushConstantRanges);
 
     private:
 
@@ -73,5 +70,31 @@ namespace BlitzenVulkan
 
         std::vector<VkDynamicState> m_dynamicStates{};
         VkPipelineDynamicStateCreateInfo m_dynamicState{};
+    };
+
+    //Helper function that compiles spir-v and adds it to shader stage. Will aid in the creation of graphics and compute pipelines
+    void CreateShaderProgram(const VkDevice& device, const char* filepath, VkShaderStageFlagBits shaderStage, const char* entryPointName, 
+    VkShaderModule& shaderModule, VkPipelineShaderStageCreateInfo& pipelineShaderStage, std::vector<char>& shaderCode);
+
+    //Helper function that creates a pipeline layout that will be used by a compute or graphics pipeline
+    void CreatePipelineLayout(VkDevice device, VkPipelineLayout* layout, uint32_t descriptorSetLayoutCount, 
+    VkDescriptorSetLayout* pDescriptorSetLayouts, uint32_t pushConstantRangeCount, VkPushConstantRange* pPushConstantRanges);
+
+    //Helper function for pipeline layout creation, takes care of a single set layout binding creation
+    void CreateDescriptorSetLayoutBinding(VkDescriptorSetLayoutBinding& bindingInfo, uint32_t binding, uint32_t descriptorCount, 
+    VkDescriptorType descriptorType, VkShaderStageFlags shaderStage, VkSampler* pImmutableSamplers = nullptr);
+
+    //Helper function for pipeline layout creation, takes care of a single descriptor set layout creation
+    VkDescriptorSetLayout CreateDescriptorSetLayout(VkDevice device, uint32_t bindingCount, VkDescriptorSetLayoutBinding* pBindings);
+
+    //Helper function for pipeline layout creation, takes care of a single push constant creation
+    void CreatePushConstantRange(VkPushConstantRange& pushConstant, VkShaderStageFlags shaderStage, uint32_t size, uint32_t offset = 0);
+
+    //Holds all the relevant data for a compute pipeline
+    struct ComputePipelineData
+    {
+        VkPipeline pipeline;
+        VkPipelineLayout layout;
+        std::vector<VkDescriptorSetLayout> setLayouts;
     };
 }

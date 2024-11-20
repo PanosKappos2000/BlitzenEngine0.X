@@ -12,8 +12,15 @@ namespace BlitzenVulkan
     void GraphicsPipelineBuilder::CreateShaderStage(const char* filepath, VkShaderStageFlagBits shaderStage, 
     const char* entryPointName)
     {
-        m_shaderCodes.push_back(std::vector<char>());
-        //Initialize a file reader for the .spv in binary format and with the cursor at the end of the file
+        m_shaderCodes.emplace_back(std::vector<char>());
+        m_shaderModules.emplace_back(VkShaderModule());
+        m_shaderStages.emplace_back(VkPipelineShaderStageCreateInfo());
+        CreateShaderProgram(*m_pDevice, filepath, shaderStage, entryPointName, m_shaderModules.back(), m_shaderStages.back(), m_shaderCodes.back());
+    }
+
+    void CreateShaderProgram(const VkDevice& device, const char* filepath, VkShaderStageFlagBits shaderStage, const char* entryPointName, 
+    VkShaderModule& shaderModule, VkPipelineShaderStageCreateInfo& pipelineShaderStage, std::vector<char>& shaderCode)
+    {
         std::ifstream file(filepath, std::ios::ate | std::ios::binary);
         //If the file did not open, something might be wrong with the filepath, so it needs to be checked
         if (!file.is_open())
@@ -21,27 +28,25 @@ namespace BlitzenVulkan
         	__debugbreak();
         }
         size_t filesize = static_cast<size_t>(file.tellg());
-        m_shaderCodes.back().resize(filesize);
+        shaderCode.resize(filesize);
         //put the file cursor at the beginning
         file.seekg(0);
         // load the entire file into the array
-        file.read(m_shaderCodes.back().data(), filesize);
+        file.read(shaderCode.data(), filesize);
         file.close();
 
         //Wrap the code in a shader module object
         VkShaderModuleCreateInfo shaderModuleInfo{};
         shaderModuleInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-        shaderModuleInfo.codeSize = static_cast<uint32_t>(m_shaderCodes.back().size());
-        shaderModuleInfo.pCode = reinterpret_cast<uint32_t*>(m_shaderCodes.back().data());
-        m_shaderModules.push_back(VkShaderModule());
-        vkCreateShaderModule(*m_pDevice, &shaderModuleInfo, nullptr, &m_shaderModules.back());
+        shaderModuleInfo.codeSize = static_cast<uint32_t>(shaderCode.size());
+        shaderModuleInfo.pCode = reinterpret_cast<uint32_t*>(shaderCode.data());
+        vkCreateShaderModule(device, &shaderModuleInfo, nullptr, &shaderModule);
 
         //Adds a new shader stage based on that shader module
-        m_shaderStages.push_back(VkPipelineShaderStageCreateInfo{});
-        m_shaderStages.back().sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        m_shaderStages.back().module = m_shaderModules.back();
-        m_shaderStages.back().stage = shaderStage;
-        m_shaderStages.back().pName = entryPointName;
+        pipelineShaderStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        pipelineShaderStage.module = shaderModule;
+        pipelineShaderStage.stage = shaderStage;
+        pipelineShaderStage.pName = entryPointName;
     }
 
     void GraphicsPipelineBuilder::SetTriangleListInputAssembly()
@@ -130,8 +135,8 @@ namespace BlitzenVulkan
         m_colorBlending.pAttachments = &m_colorBlendAttachment;
     }
 
-    void GraphicsPipelineBuilder::CreatePipelineLayout(uint32_t descriptorSetLayoutCount, VkDescriptorSetLayout* pDescriptorSetLayouts, 
-    uint32_t pushConstantRangeCount, VkPushConstantRange* pPushConstantRanges)
+    void CreatePipelineLayout(VkDevice device, VkPipelineLayout* pLayout, uint32_t descriptorSetLayoutCount, 
+    VkDescriptorSetLayout* pDescriptorSetLayouts, uint32_t pushConstantRangeCount, VkPushConstantRange* pPushConstantRanges)
     {
         VkPipelineLayoutCreateInfo layoutInfo{};
         layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -139,7 +144,36 @@ namespace BlitzenVulkan
         layoutInfo.pSetLayouts = pDescriptorSetLayouts;
         layoutInfo.pushConstantRangeCount = pushConstantRangeCount;
         layoutInfo.pPushConstantRanges = pPushConstantRanges;
-        vkCreatePipelineLayout(*m_pDevice, &layoutInfo, nullptr, m_pLayout);
+        vkCreatePipelineLayout(device, &layoutInfo, nullptr, pLayout);
+    }
+
+    void CreateDescriptorSetLayoutBinding(VkDescriptorSetLayoutBinding& bindingInfo, uint32_t binding, uint32_t descriptorCount, 
+    VkDescriptorType descriptorType, VkShaderStageFlags shaderStage, VkSampler* pImmutableSamplers /*= nullptr*/)
+    {
+        bindingInfo.binding = binding;
+        bindingInfo.descriptorCount = descriptorCount;
+        bindingInfo.descriptorType = descriptorType;
+        bindingInfo.stageFlags = shaderStage;
+        bindingInfo.pImmutableSamplers = pImmutableSamplers;
+    }
+
+    VkDescriptorSetLayout CreateDescriptorSetLayout(VkDevice device, uint32_t bindingCount, VkDescriptorSetLayoutBinding* pBindings)
+    {
+        VkDescriptorSetLayoutCreateInfo info{};
+        info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        info.bindingCount = bindingCount;
+        info.pBindings = pBindings;
+
+        VkDescriptorSetLayout setLayout;
+        vkCreateDescriptorSetLayout(device, &info, nullptr, &setLayout);
+        return setLayout;
+    }
+
+    void CreatePushConstantRange(VkPushConstantRange& pushConstant, VkShaderStageFlags shaderStage, uint32_t size, uint32_t offset /* =0 */)
+    {
+        pushConstant.stageFlags = shaderStage;
+        pushConstant.size = size;
+        pushConstant.offset = offset;
     }
 
     void GraphicsPipelineBuilder::Build()

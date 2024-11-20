@@ -28,6 +28,8 @@ namespace BlitzenVulkan
 
         InitPlaceholderTextures();
 
+
+
         //Temporarily holds all vertices, once every scene and asset is loaded, it will all be uploaded in a unified storage buffer
         std::vector<Vertex> vertices;
         //Temporarily holds all indices, once every scene and asset is loaded, it will all be uploaded in a unified index buffer
@@ -62,6 +64,10 @@ namespace BlitzenVulkan
         }
         #endif
 
+        #if BLITZEN_START_VULKAN_WITH_INDIRECT
+            InitComputePipelines();
+        #endif
+
         //This probably needs a better interface but it does its job for now
         InitMainMaterialData(static_cast<uint32_t>(materialResources.size()));
 
@@ -71,7 +77,7 @@ namespace BlitzenVulkan
         #if BLITZEN_START_VULKAN_WITH_INDIRECT
             UploadGlobalBuffersToGPU(vertices, indices, materialConstants, m_mainDrawContext.indirectDrawData);
         #else
-            std::vector<DrawIndirectCommand> emptyIndirect;
+            std::vector<DrawIndirectData> emptyIndirect;
             UploadGlobalBuffersToGPU(vertices, indices, materialConstants, emptyIndirect);
         #endif
         //Write all material resources to the global descriptor set
@@ -132,7 +138,9 @@ namespace BlitzenVulkan
         vulkan11Features.shaderDrawParameters = true;
 
         VkPhysicalDeviceFeatures vulkanFeatures{};
-        vulkanFeatures.multiDrawIndirect = true;
+        #if BLITZEN_START_VULKAN_WITH_INDIRECT
+            vulkanFeatures.multiDrawIndirect = true;
+        #endif
 
         //vkbDeviceSelector built with reference to vkbInstance built earlier
         vkb::PhysicalDeviceSelector vkbDeviceSelector{ vkbInstance };
@@ -589,12 +597,43 @@ namespace BlitzenVulkan
         vkCreateSampler(m_device, &linearSamplerInfo, nullptr, &m_placeholderLinearSampler);
     }
 
+    void VulkanRenderer::InitComputePipelines()
+    {
+        #if BLITZEN_START_VULKAN_WITH_INDIRECT
+            //Create a shader code for the compute shader spir-v code
+            VkShaderModule computeShaderModule{};
+            VkPipelineShaderStageCreateInfo pipelineShaderStage{};
+            std::vector<char> shaderCode;
+            CreateShaderProgram(m_device, "VulkanShaders/IndirectCulling.comp.glsl.spv", VK_SHADER_STAGE_COMPUTE_BIT, "main", computeShaderModule, 
+            pipelineShaderStage, shaderCode);
+
+            VkDescriptorSetLayoutBinding frustumCullingDescriptorSetLayoutBinding{};
+            CreateDescriptorSetLayoutBinding(frustumCullingDescriptorSetLayoutBinding, 0, 6, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 
+            VK_SHADER_STAGE_COMPUTE_BIT);
+            m_indirectCullingComputePipelineData.setLayouts.resize(1);
+            m_indirectCullingComputePipelineData.setLayouts[0] = CreateDescriptorSetLayout(m_device, 1, 
+            &frustumCullingDescriptorSetLayoutBinding);
+            CreatePipelineLayout(m_device, &(m_indirectCullingComputePipelineData.layout), 1, 
+            m_indirectCullingComputePipelineData.setLayouts.data(), 0, nullptr);
+
+            VkComputePipelineCreateInfo cullingPipelineInfo{};
+            cullingPipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+            cullingPipelineInfo.stage = pipelineShaderStage;
+            cullingPipelineInfo.layout = m_indirectCullingComputePipelineData.layout;
+
+            vkCreateComputePipelines(m_device, nullptr, 1, &cullingPipelineInfo, nullptr, &(m_indirectCullingComputePipelineData.pipeline));
+
+            vkDestroyShaderModule(m_device, computeShaderModule, nullptr);
+        #endif
+    }
+
     void VulkanRenderer::InitMainMaterialData(uint32_t materialDescriptorCount)
     {
         GraphicsPipelineBuilder opaquePipelineBuilder;
         opaquePipelineBuilder.Init(&m_device, &(m_mainMaterialData.opaquePipeline.pipelineLayout), 
         &(m_mainMaterialData.opaquePipeline.graphicsPipeline));
 
+        //Set the fixed function states and the dynamic state
         opaquePipelineBuilder.CreateShaderStage("VulkanShaders/MainGeometryShader.vert.glsl.spv", VK_SHADER_STAGE_VERTEX_BIT, "main");
         opaquePipelineBuilder.CreateShaderStage("VulkanShaders/MainGeometryShader.frag.glsl.spv", VK_SHADER_STAGE_FRAGMENT_BIT, "main");
         opaquePipelineBuilder.SetTriangleListInputAssembly();
@@ -609,63 +648,40 @@ namespace BlitzenVulkan
 
         //Setting the binding for the scene data uniform buffer descriptor 
         VkDescriptorSetLayoutBinding sceneDataDescriptorBinding{};
-        sceneDataDescriptorBinding.binding = 0;
-        sceneDataDescriptorBinding.descriptorCount = 1;
-        sceneDataDescriptorBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        sceneDataDescriptorBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-
+        CreateDescriptorSetLayoutBinding(sceneDataDescriptorBinding, 0, 1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 
+        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
         //The descriptor set layout for the scene data will be one set with one binding
-        VkDescriptorSetLayoutCreateInfo sceneDataDescriptorLayoutInfo{};
-        sceneDataDescriptorLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        sceneDataDescriptorLayoutInfo.bindingCount = 1;
-        sceneDataDescriptorLayoutInfo.pBindings = &sceneDataDescriptorBinding;
-        vkCreateDescriptorSetLayout(m_device, &sceneDataDescriptorLayoutInfo, nullptr, &m_globalSceneDescriptorSetLayout);
-
+        m_globalSceneDescriptorSetLayout = CreateDescriptorSetLayout(m_device, 1, &sceneDataDescriptorBinding);
         //Setting the binding for the combined image sampler for the base color texture of a material
         VkDescriptorSetLayoutBinding materialBaseColorTextureBinding{};
-        materialBaseColorTextureBinding.binding = 0;
-        //After loading the scene, the amount of texture descriptors is known and is passed to the shader 
-        materialBaseColorTextureBinding.descriptorCount = materialDescriptorCount;
-        materialBaseColorTextureBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        materialBaseColorTextureBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-
+        CreateDescriptorSetLayoutBinding(materialBaseColorTextureBinding, 0, materialDescriptorCount, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 
+        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
         //Setting the binding for the combined image sampler for the metallic texture of a material
         VkDescriptorSetLayoutBinding materialMetallicTextureBinding{};
-        materialMetallicTextureBinding.binding = 1;
-        //After loading the scene, the amount of texture descriptors is known and is passed to the shader 
-        materialMetallicTextureBinding.descriptorCount = materialDescriptorCount;
-        materialMetallicTextureBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        materialMetallicTextureBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-
+        CreateDescriptorSetLayoutBinding(materialBaseColorTextureBinding, 1, materialDescriptorCount, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 
+        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
         //Collecting all the material descriptor set layout bindings to pass to its layout
         std::array<VkDescriptorSetLayoutBinding, 2> materialDescriptorSetLayoutBindings = 
         {
             materialBaseColorTextureBinding,
             materialMetallicTextureBinding
         };
-        
         //Create the layout for the material data descriptor set
-        VkDescriptorSetLayoutCreateInfo materialDescriptorSetLayoutCreateInfo{};
-        materialDescriptorSetLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        materialDescriptorSetLayoutCreateInfo.bindingCount = static_cast<uint32_t>(materialDescriptorSetLayoutBindings.size());
-        materialDescriptorSetLayoutCreateInfo.pBindings = materialDescriptorSetLayoutBindings.data();
-        vkCreateDescriptorSetLayout(m_device, &materialDescriptorSetLayoutCreateInfo, nullptr, 
-        &m_mainMaterialData.mainMaterialDescriptorSetLayout);
-
+        m_mainMaterialData.mainMaterialDescriptorSetLayout = CreateDescriptorSetLayout(m_device, static_cast<uint32_t>(
+        materialDescriptorSetLayoutBindings.size()), materialDescriptorSetLayoutBindings.data());
+        //Add both descriptor set layout to the array that will be passed to the pipeline layout function
         std::array<VkDescriptorSetLayout, 2> descriptorSetLayouts = 
         {
             m_globalSceneDescriptorSetLayout, m_mainMaterialData.mainMaterialDescriptorSetLayout
         };
-
         //Setting the push constant that will be passed to the shader for every object to specify their model matrix
         VkPushConstantRange pushConstants{};
-        pushConstants.offset = 0;
-        pushConstants.size = sizeof(DrawDataPushConstant);
-        pushConstants.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        CreatePushConstantRange(pushConstants, VK_SHADER_STAGE_VERTEX_BIT, sizeof(DrawDataPushConstant));
+        //Create the pipeline layout with all descriptor sets and push constants
+        CreatePipelineLayout(m_device, opaquePipelineBuilder.m_pLayout, static_cast<uint32_t>(descriptorSetLayouts.size()), 
+        descriptorSetLayouts.data(), 1, &pushConstants);
 
-        opaquePipelineBuilder.CreatePipelineLayout(static_cast<uint32_t>(descriptorSetLayouts.size()), descriptorSetLayouts.data(), 
-        1, &pushConstants);
-
+        //build the pipeline
         opaquePipelineBuilder.Build();
 
         //Since indirect draw will have to use a different shader, a new pipeline needs to be created for it
@@ -686,8 +702,8 @@ namespace BlitzenVulkan
             opaquePipelineBuilder.DisableColorBlending();
 
             //The indirect pipeline does not use push constants since there will be very few draw calls each frame
-            opaquePipelineBuilder.CreatePipelineLayout(static_cast<uint32_t>(descriptorSetLayouts.size()), descriptorSetLayouts.data(), 
-            0, nullptr);
+            CreatePipelineLayout(m_device, opaquePipelineBuilder.m_pLayout,static_cast<uint32_t>(descriptorSetLayouts.size()), 
+            descriptorSetLayouts.data(), 0, nullptr);
 
             opaquePipelineBuilder.Build();
         #endif
@@ -1506,8 +1522,9 @@ namespace BlitzenVulkan
         #else
             vkCmdBindPipeline(frameCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
             m_mainMaterialData.opaquePipeline.graphicsPipeline);
+            VkDescriptorSet descriptorSetsToBind[2] = { sceneDataDescriptorSet, m_mainMaterialData.mainMaterialDescriptorSet };
             vkCmdBindDescriptorSets(frameCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-            m_mainMaterialData.opaquePipeline.pipelineLayout, 0, 1, &sceneDataDescriptorSet, 0, nullptr);
+            m_mainMaterialData.opaquePipeline.pipelineLayout, 0, 2, descriptorSetsToBind, 0, nullptr);
         #endif
         //Since viewport and scissor were specified in the dynamic state, they now need to be set
         VkViewport viewport{};
@@ -1558,10 +1575,11 @@ namespace BlitzenVulkan
                 //The model/surface that is currently being worked on
                 RenderObject& opaque = m_mainDrawContext.opaqueRenderObjects[i];
 
-                ModelMatrixPushConstant pushConstant;
+                DrawDataPushConstant pushConstant;
                 pushConstant.modelMatrix = opaque.modelMatrix;
+                pushConstant.materialIndex = opaque.pMaterial->materialIndex;
                 vkCmdPushConstants(frameCommandBuffer, opaque.pMaterial->pPipeline->pipelineLayout,
-                    VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(ModelMatrixPushConstant), &pushConstant);
+                    VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(DrawDataPushConstant), &pushConstant);
                 vkCmdDrawIndexed(frameCommandBuffer, opaque.indexCount, 1, opaque.firstIndex, 0, 0);
             }
         #endif
@@ -1702,6 +1720,12 @@ namespace BlitzenVulkan
 
         #if BLITZEN_START_VULKAN_WITH_INDIRECT
             vmaDestroyBuffer(m_allocator, m_drawIndirectDataBuffer.buffer, m_drawIndirectDataBuffer.allocation);
+            vkDestroyPipeline(m_device, m_indirectCullingComputePipelineData.pipeline, nullptr);
+            vkDestroyPipelineLayout(m_device, m_indirectCullingComputePipelineData.layout, nullptr);
+            for(size_t i = 0; i < m_indirectCullingComputePipelineData.setLayouts.size(); ++i)
+            {
+                vkDestroyDescriptorSetLayout(m_device, m_indirectCullingComputePipelineData.setLayouts[i], nullptr);
+            }
         #endif
         vmaDestroyBuffer(m_allocator, m_globalMaterialConstantsBuffer.buffer, m_globalMaterialConstantsBuffer.allocation);
         vmaDestroyBuffer(m_allocator, m_globalIndexAndVertexBuffer.vertexBuffer.buffer, 
