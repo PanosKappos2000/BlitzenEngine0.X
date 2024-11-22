@@ -13,27 +13,11 @@
 #include "fastgltf/tools.hpp"
 #include "fastgltf/glm_element_traits.hpp"
 
+#include "Game/camera.h"
+
 namespace BlitzenVulkan
 {
     #define BLITZEN_VULKAN_MAX_FRAMES_IN_FLIGHT  2
-
-    //TODO: Move this to main engine(give it a better name as well) and give the renderer a more compact window data struct
-    struct WindowData
-    {
-        GLFWwindow* pWindow;
-        int width = 800;
-        int height = 650;
-        const char* title = "Blitzen0.X";
-
-        bool bWindowShouldClose = false;
-        bool bWindowResizeRequested = false;
-
-        double currentMouseX = 0;
-        double currentMouseY = 0;
-
-        //This will be used to call functions set by the user for certain inputs
-        BlitzenEngine::Controller* pController;
-    };
 
     //Everything that uses VkBootstrap for initalization (except for the VkDevice which is a frequently used component)
     struct VkBootstrapObjects
@@ -103,16 +87,13 @@ namespace BlitzenVulkan
     class VulkanRenderer
     {
     public:
-        void Init();
+        void Init(GLFWwindow* pWindow, int* pWidth, int* pHeight);
 
-        void DrawFrame();
+        void DrawFrame(const BlitzenEngine::Camera& camera, bool bWindowResize);
 
         void CleanupResources();
 
     private:
-
-        //Initializes glfw and the window that the renderer will render into
-        void glfwWindowInit();
 
         //Initializes the objects that are part of VkBootstrapObjects using the vkBootstrap library
         void VkBootstrapInitializationHelp();
@@ -184,7 +165,9 @@ namespace BlitzenVulkan
 
     public:
 
-        WindowData m_windowData;
+        GLFWwindow* m_pWindow;
+        int* m_pWindowWidth;
+        int* m_pWindowHeight;
 
         //Holds some variables that change the way the renderer works
         VulkanStats stats;

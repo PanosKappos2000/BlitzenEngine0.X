@@ -2,12 +2,12 @@
 
 namespace BlitzenEngine
 {
-    void Camera::Init(glm::mat4* pMatrix, float* pDeltaTime)
+    void Camera::Init(float* pDeltaTime, const int* pWindowWidth, const int* pWindowHeight)
     {
         //Storing the delta time, as it will be constantly used in camera functions, I'll probably do this differently in the future
         m_pDeltaTime = pDeltaTime;
-        //Storing the view matrix, so that camera function can change it directly, without communicating with the renderer
-        m_pViewMatrix = pMatrix;
+        m_pWindowWidth = pWindowWidth;
+        m_pWindowHeight = pWindowHeight;
 
         MoveCamera(glm::vec3(0.f, 0.f, 0.f), 0.f , 0.f);
     }
@@ -34,6 +34,7 @@ namespace BlitzenEngine
         m_position += glm::vec3(rotationMatrix * glm::vec4(velocity * (*m_pDeltaTime) * m_speed, 0.f));
         glm::mat4 translationMatrix = glm::translate(glm::mat4(1.f), m_position);
 
-        *m_pViewMatrix = glm::inverse(translationMatrix * rotationMatrix);
+        m_viewMatrix = glm::inverse(translationMatrix * rotationMatrix);
+        m_projectionMatrix = glm::perspective(glm::radians(m_fovY), static_cast<float>(*m_pWindowWidth) / static_cast<float>(*m_pWindowHeight), m_zNear, m_zFar);
     }
 }

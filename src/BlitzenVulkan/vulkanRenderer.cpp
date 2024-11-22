@@ -8,23 +8,26 @@
 
 namespace BlitzenVulkan
 {
-    void VulkanRenderer::Init()
+    void VulkanRenderer::Init(GLFWwindow* pWindow, int* pWidth, int* pHeight)
     {
-        glfwWindowInit();
+        m_pWindow = pWindow;
+        m_pWindowWidth = pWidth;
+        m_pWindowHeight = pHeight; 
+
         VkBootstrapInitializationHelp();
         InitAllocator();
         InitCommands();
 
         //Setup rendering attachments(depth and color image)
         AllocateImage(m_drawingAttachment, 
-        VkExtent3D{static_cast<uint32_t>(m_windowData.width), static_cast<uint32_t>(m_windowData.height), 1}, 
+        VkExtent3D{static_cast<uint32_t>(*m_pWindowWidth), static_cast<uint32_t>(*m_pWindowHeight), 1}, 
         VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | 
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT);
         AllocateImage(m_depthAttachment, 
-        VkExtent3D{static_cast<uint32_t>(m_windowData.width), static_cast<uint32_t>(m_windowData.height), 1}, 
+        VkExtent3D{static_cast<uint32_t>(*m_pWindowWidth), static_cast<uint32_t>(*m_pWindowHeight), 1}, 
         VK_FORMAT_D32_SFLOAT, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
-        m_drawExtent.width = m_windowData.width;
-        m_drawExtent.height = m_windowData.height;
+        m_drawExtent.width = *m_pWindowWidth;
+        m_drawExtent.height = *m_pWindowHeight;
 
         InitPlaceholderTextures();
 
@@ -39,7 +42,7 @@ namespace BlitzenVulkan
         //Temporarily holds all material resources, once every scene and asset is loaded, it will all written to two uniform buffer arrays
         std::vector<MaterialResources> materialResources;
         std::string testScene = "Assets/structure.glb";
-        std::string testScene2 = "Assets/city.glb";
+        std::string testScene2 = "Assets/Highpoly.glb";
         LoadScene(testScene, "structure", vertices, indices, materialConstants, materialResources);
         LoadScene(testScene2, "city", vertices, indices, materialConstants, materialResources);
         //Update every node in the scene to be included in the draw context
@@ -47,20 +50,20 @@ namespace BlitzenVulkan
         m_scenes["city"].AddToDrawContext(glm::translate(glm::mat4(1.f), glm::vec3(0.f, 0.f, -300.f)), m_mainDrawContext);
         #ifdef NDEBUG
         float iter = 1;
-        for (float f = 0.f; f < 1.f; f += 0.1f)
+        for (float f = 0.f; f < 10.f; f += 1.f)
         {
             iter *= -1;
-            m_scenes["structure"].AddToDrawContext(glm::translate(glm::mat4(1.f), glm::vec3(-iter, iter, -f)), m_mainDrawContext);
+            m_scenes["city"].AddToDrawContext(glm::translate(glm::mat4(1.f), glm::vec3(-iter, iter, -f)), m_mainDrawContext);
         }
-        for (float f = 0.f; f < 1.f; f += 0.1f)
+        for (float f = 0.f; f < 10.f; f += 1.f)
         {
             iter *= -1;
-            m_scenes["structure"].AddToDrawContext(glm::translate(glm::mat4(1.f), glm::vec3(iter, f, -iter)), m_mainDrawContext);
+            m_scenes["city"].AddToDrawContext(glm::translate(glm::mat4(1.f), glm::vec3(iter, f, -iter)), m_mainDrawContext);
         }
-        for (float f = 0.f; f < 1.f; f += 0.1f)
+        for (float f = 0.f; f < 10.f; f += 1.f)
         {
             iter *= -1;
-            m_scenes["structure"].AddToDrawContext(glm::translate(glm::mat4(1.f), glm::vec3(f, -iter, iter)), m_mainDrawContext);
+            m_scenes["city"].AddToDrawContext(glm::translate(glm::mat4(1.f), glm::vec3(f, -iter, iter)), m_mainDrawContext);
         }
         #endif
 
@@ -84,15 +87,6 @@ namespace BlitzenVulkan
         UploadMaterialResourcesToGPU(materialResources);
     }
 
-    void VulkanRenderer::glfwWindowInit()
-    {
-        glfwInit();
-
-        glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-
-        m_windowData.pWindow = glfwCreateWindow(m_windowData.width, m_windowData.height, m_windowData.title, nullptr, nullptr);
-    }
-
     void VulkanRenderer::VkBootstrapInitializationHelp()
     {
         vkb::InstanceBuilder vkbInstanceBuilder;
@@ -113,7 +107,7 @@ namespace BlitzenVulkan
         m_bootstrapObjects.debugMessenger = vkbInstance.debug_messenger;
 
         //Creates window surface before device selection
-        glfwCreateWindowSurface(m_bootstrapObjects.instance, m_windowData.pWindow, nullptr, &(m_bootstrapObjects.surface));
+        glfwCreateWindowSurface(m_bootstrapObjects.instance, m_pWindow, nullptr, &(m_bootstrapObjects.surface));
 
         //Setting desired vulkan 1.3 features
         VkPhysicalDeviceVulkan13Features vulkan13Features{};
@@ -183,7 +177,7 @@ namespace BlitzenVulkan
         vkb::Result<vkb::Swapchain> vkbSwapBuilderResult = vkSwapBuilder.set_desired_format(VkSurfaceFormatKHR{ 
             m_bootstrapObjects.swapchainImageFormat, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR }) //Setting the desrired surface format
         	.set_desired_present_mode(VK_PRESENT_MODE_FIFO_KHR)//Setting the present mode to be limited to the speed of the monitor
-        	.set_desired_extent(m_windowData.width, m_windowData.height)
+        	.set_desired_extent(*m_pWindowWidth, *m_pWindowHeight)
         	.add_image_usage_flags(VK_IMAGE_USAGE_TRANSFER_DST_BIT)
         	.build();
 
@@ -1151,14 +1145,16 @@ namespace BlitzenVulkan
             //Add a new mesh to the vulkan mesh assets array and save its name
             scene.m_meshes[gltf.meshes[i].name.c_str()] = MeshAsset();
             meshAssets.push_back(&(scene.m_meshes[gltf.meshes[i].name.c_str()]));
-            meshAssets.back()->assetName = gltf.meshes[i].name;
+            MeshAsset* pMesh = meshAssets.back();
+            pMesh->assetName = gltf.meshes[i].name;
+            size_t meshVertexCount = 0;
             //Iterate through all the surfaces in the mesh asset
             for (auto& primitive : gltf.meshes[i].primitives)
             {
                 //Add a new geoSurface object at the back of the mesh assets array and update its indices
-                meshAssets.back()->surfaces.emplace_back(GeoSurface());
-                meshAssets.back()->surfaces.back().firstIndex = static_cast<uint32_t>(indices.size());
-                meshAssets.back()->surfaces.back().indexCount = static_cast<uint32_t>(gltf.accessors[primitive.indicesAccessor.value()].count);
+                pMesh->surfaces.emplace_back(GeoSurface());
+                pMesh->surfaces.back().firstIndex = static_cast<uint32_t>(indices.size());
+                pMesh->surfaces.back().indexCount = static_cast<uint32_t>(gltf.accessors[primitive.indicesAccessor.value()].count);
                 GeoSurface& currentSurface = meshAssets.back()->surfaces.back();
 
                 size_t initialVertex = vertices.size();
@@ -1167,19 +1163,16 @@ namespace BlitzenVulkan
                 fastgltf::Accessor& indexaccessor = gltf.accessors[primitive.indicesAccessor.value()];
                 indices.reserve(indices.size() + indexaccessor.count);
 
-                fastgltf::iterateAccessor<std::uint32_t>(gltf, indexaccessor,
-                    [&](std::uint32_t idx) 
-                    {
-                        indices.push_back(idx + static_cast<uint32_t>(initialVertex));
-                    });
+                fastgltf::iterateAccessor<std::uint32_t>(gltf, indexaccessor, [&](std::uint32_t idx) {
+                    indices.push_back(idx + static_cast<uint32_t>(initialVertex));
+                });
 
                 /* Load vertex positions */
                 fastgltf::Accessor& posAccessor = gltf.accessors[primitive.findAttribute("POSITION")->second];
                 size_t previousVerticesSize = vertices.size();
                 vertices.resize(vertices.size() + posAccessor.count);
 
-                fastgltf::iterateAccessorWithIndex<glm::vec3>(gltf, posAccessor,
-                [&](glm::vec3 v, size_t index) {
+                fastgltf::iterateAccessorWithIndex<glm::vec3>(gltf, posAccessor, [&](glm::vec3 v, size_t index) {
                     Vertex& newVertex = vertices[initialVertex + index];
                     newVertex.position = v;
                     newVertex.normal = { 1, 0, 0 };
@@ -1189,8 +1182,7 @@ namespace BlitzenVulkan
                     //Add every surface to the center
                     currentSurface.center += v;
                 });
-                //Divide the center used for frustum data by the amount of vertices
-                meshAssets.back()->surfaces.back().center /= static_cast<float>(posAccessor.count);
+                currentSurface.center /= static_cast<float>(posAccessor.count);
                 for(size_t i = previousVerticesSize; i < vertices.size(); ++i)
                 {
                     currentSurface.radius = std::max(currentSurface.radius, glm::distance(currentSurface.center, vertices[i].position));
@@ -1241,7 +1233,6 @@ namespace BlitzenVulkan
                     meshAssets.back()->surfaces.back().pMaterial = materials[0];
                 }
             }
-
         }
 
         /* Load each node in the gltf scene */
@@ -1256,23 +1247,29 @@ namespace BlitzenVulkan
                 nodes.back()->pMesh = meshAssets[*node.meshIndex];
             }
 
-            //Update the local transofrm of each node
-            std::visit(fastgltf::visitor { [&](fastgltf::Node::TransformMatrix matrix) {
-                                          memcpy(&(nodes.back()->localTransform), matrix.data(), sizeof(matrix));
-                                          },
-                                          [&](fastgltf::Node::TRS transform) {
-                                            glm::vec3 tl(transform.translation[0], transform.translation[1],
-                                                transform.translation[2]);
-                                            glm::quat rot(transform.rotation[3], transform.rotation[0], transform.rotation[1],
-                                                transform.rotation[2]);
-                                            glm::vec3 sc(transform.scale[0], transform.scale[1], transform.scale[2]);
-
-                                            glm::mat4 tm = glm::translate(glm::mat4(1.f), tl);
-                                            glm::mat4 rm = glm::toMat4(rot);
-                                            glm::mat4 sm = glm::scale(glm::mat4(1.f), sc);
-
-                                            nodes.back()->localTransform = tm * rm * sm;
-                                            } }, node.transform);
+            //Takes a variant (node.transform) and calls the correct function to derive the local transform of each mesh
+            std::visit(
+            fastgltf::visitor 
+            { 
+                [&](fastgltf::Node::TransformMatrix matrix) {
+                    memcpy(&(nodes.back()->localTransform), matrix.data(), sizeof(matrix));
+                },
+                [&](fastgltf::Node::TRS transform) {
+                    //Get the translation vector to create the translation matrix
+                    glm::vec3 translation(transform.translation[0], transform.translation[1], transform.translation[2]);
+                    //Create a quaternion to create the rotation matrix of the transform
+                    glm::quat rotation(transform.rotation[3], transform.rotation[0], transform.rotation[1], transform.rotation[2]);
+                    //Get the scale vector to create the scale matrix
+                    glm::vec3 scale(transform.scale[0], transform.scale[1], transform.scale[2]);
+                    //Create the matrices
+                    glm::mat4 translationMatrix = glm::translate(glm::mat4(1.f), translation);
+                    glm::mat4 rotationMatrix = glm::toMat4(rotation);
+                    glm::mat4 scaleMatrix = glm::scale(glm::mat4(1.f), scale);
+                    //Derive the local transform
+                    nodes.back()->localTransform = translationMatrix * rotationMatrix * scaleMatrix;
+                 } 
+            }
+            , node.transform);
 
         }
 
@@ -1373,24 +1370,24 @@ namespace BlitzenVulkan
     /*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     This is where all rendering commands during the game loop occur.
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*/
-    void VulkanRenderer::DrawFrame()
+    void VulkanRenderer::DrawFrame(const BlitzenEngine::Camera& camera, bool bWindowResize)
     {
-        //If the window is resized, the swapchain needs to adapt
-        if (m_windowData.bWindowResizeRequested)
+        if(bWindowResize)
         {
             BootstrapRecreateSwapchain();
         }
 
-
         /*-------------------------------
         Setting up the global scene data
         ---------------------------------*/
-        //Setup the projection matrix
-        m_globalSceneData.projectionMatrix = glm::perspective(glm::radians(70.f), (float)m_windowData.width /
-            (float)m_windowData.height, 10000.f, 0.1f);
+        //Setup the projection and view matrix
+        m_globalSceneData.viewMatrix = camera.GetViewMatrix();
+        m_globalSceneData.projectionMatrix = camera.GetProjectionMatrix();
         //Invert the projection matrix so that it matches glm and objects are not drawn upside down
         m_globalSceneData.projectionMatrix[1][1] *= -1;
         m_globalSceneData.projectionViewMatrix = m_globalSceneData.projectionMatrix * m_globalSceneData.viewMatrix;
+
+
         //Default lighting parameters
         m_globalSceneData.ambientColor = glm::vec4(.1f);
         m_globalSceneData.sunlightColor = glm::vec4(1.f);
@@ -1401,6 +1398,32 @@ namespace BlitzenVulkan
         Global scene data set
         ------------------------------*/
 
+
+        /*
+        Initializing frustum culling data
+        */
+        glm::vec4 frustumData[6];
+        frustumData[0] = m_globalSceneData.projectionViewMatrix[3] + m_globalSceneData.projectionViewMatrix[0];
+        frustumData[1] = m_globalSceneData.projectionViewMatrix[3] - m_globalSceneData.projectionViewMatrix[0];
+        frustumData[2] = m_globalSceneData.projectionViewMatrix[3] + m_globalSceneData.projectionViewMatrix[1];
+        frustumData[3] = m_globalSceneData.projectionViewMatrix[3] - m_globalSceneData.projectionViewMatrix[1];
+        frustumData[4] = m_globalSceneData.projectionViewMatrix[3] + m_globalSceneData.projectionViewMatrix[2];
+        frustumData[5] = m_globalSceneData.projectionViewMatrix[3] - m_globalSceneData.projectionViewMatrix[2];
+        //If indirect mode is not active frustum culling is done on the cpu
+        if(!stats.drawIndirectMode)
+        {
+            for(RenderObject& object : m_mainDrawContext.opaqueRenderObjects)
+            {
+                bool visible = true;
+                for(size_t i = 0; i < 6; ++i)
+                {
+                    glm::vec3 center = m_globalSceneData.projectionViewMatrix * glm::vec4((object.center * object.scale + object.position), 1.f); 
+                    float radius = object.radius * object.scale;
+                    visible = visible && (glm::dot(frustumData[i], glm::vec4(center, 1)) > -radius);
+                }
+                object.bVisible = visible;
+            }
+        }
 
         //Getting the tools that will be used this frame
         VkCommandBuffer& frameCommandBuffer = m_frameTools[m_currentFrame].graphicsCommandBuffer;
@@ -1429,7 +1452,7 @@ namespace BlitzenVulkan
             double frameGPU = gpuEnd - gpuStart;
             char title[256];
             sprintf_s(title, "GPU: %lf", frameGPU);
-            glfwSetWindowTitle(m_windowData.pWindow, title);
+            glfwSetWindowTitle(m_pWindow, title);
         //#endif
 
 
@@ -1613,31 +1636,31 @@ namespace BlitzenVulkan
             //Go with the traditional method if draw indirect is inactive
             else
             {
-                for(size_t i = 0; i < m_mainDrawContext.opaqueRenderObjects.size(); ++i)
+                for (const RenderObject& opaque : m_mainDrawContext.opaqueRenderObjects)
                 {
-                    //The model/surface that is currently being worked on
-                    RenderObject& opaque = m_mainDrawContext.opaqueRenderObjects[i];
-
-                    DrawDataPushConstant pushConstant;
-                    pushConstant.modelMatrix = opaque.modelMatrix;
-                    pushConstant.materialIndex = opaque.pMaterial->materialIndex;
-                    vkCmdPushConstants(frameCommandBuffer, opaque.pMaterial->pPipeline->pipelineLayout, 
-                    VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(DrawDataPushConstant), &pushConstant);
-                    vkCmdDrawIndexed(frameCommandBuffer, opaque.indexCount, 1, opaque.firstIndex, 0, 0);
+                    if(opaque.bVisible)
+                    {
+                        DrawDataPushConstant pushConstant;
+                        pushConstant.modelMatrix = opaque.modelMatrix;
+                        pushConstant.materialIndex = opaque.pMaterial->materialIndex;
+                        vkCmdPushConstants(frameCommandBuffer, opaque.pMaterial->pPipeline->pipelineLayout,
+                            VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(DrawDataPushConstant), &pushConstant);
+                        vkCmdDrawIndexed(frameCommandBuffer, opaque.indexCount, 1, opaque.firstIndex, 0, 0);
+                    }
                 }
             }
         #else
-            for (size_t i = 0; i < m_mainDrawContext.opaqueRenderObjects.size(); ++i)
+            for (const RenderObject& opaque : m_mainDrawContext.opaqueRenderObjects)
             {
-                //The model/surface that is currently being worked on
-                RenderObject& opaque = m_mainDrawContext.opaqueRenderObjects[i];
-
-                DrawDataPushConstant pushConstant;
-                pushConstant.modelMatrix = opaque.modelMatrix;
-                pushConstant.materialIndex = opaque.pMaterial->materialIndex;
-                vkCmdPushConstants(frameCommandBuffer, opaque.pMaterial->pPipeline->pipelineLayout,
-                    VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(DrawDataPushConstant), &pushConstant);
-                vkCmdDrawIndexed(frameCommandBuffer, opaque.indexCount, 1, opaque.firstIndex, 0, 0);
+                if(opaque.bVisible)
+                {
+                    DrawDataPushConstant pushConstant;
+                    pushConstant.modelMatrix = opaque.modelMatrix;
+                    pushConstant.materialIndex = opaque.pMaterial->materialIndex;
+                    vkCmdPushConstants(frameCommandBuffer, opaque.pMaterial->pPipeline->pipelineLayout,
+                        VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(DrawDataPushConstant), &pushConstant);
+                    vkCmdDrawIndexed(frameCommandBuffer, opaque.indexCount, 1, opaque.firstIndex, 0, 0);
+                }
             }
         #endif
         //End the timestamp when drawing commands end
@@ -1745,7 +1768,7 @@ namespace BlitzenVulkan
             m_bootstrapObjects.swapchainImageFormat, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR })
         	.set_desired_present_mode(VK_PRESENT_MODE_FIFO_KHR)
             //The function assumes that the window width and height have been updated
-        	.set_desired_extent(m_windowData.width, m_windowData.height)
+        	.set_desired_extent(*m_pWindowWidth, *m_pWindowHeight)
         	.add_image_usage_flags(VK_IMAGE_USAGE_TRANSFER_DST_BIT)
         	.build();
 
@@ -1757,12 +1780,10 @@ namespace BlitzenVulkan
         m_bootstrapObjects.swapchainImageViews = vkbSwapchain.get_image_views().value();
 
         //The draw extent should also be updated depending on if the swapchain got bigger or smaller
-        m_drawExtent.width = std::min(static_cast<uint32_t>(m_windowData.width), 
+        m_drawExtent.width = std::min(static_cast<uint32_t>(*m_pWindowWidth), 
         static_cast<uint32_t>(m_drawingAttachment.extent.width));
-        m_drawExtent.height = std::min(static_cast<uint32_t>(m_windowData.height), 
+        m_drawExtent.height = std::min(static_cast<uint32_t>(*m_pWindowHeight), 
         static_cast<uint32_t>(m_drawingAttachment.extent.height));
-
-        m_windowData.bWindowResizeRequested = false;
     }
 
 
@@ -1815,9 +1836,6 @@ namespace BlitzenVulkan
 
         vmaDestroyAllocator(m_allocator);
         CleanupBootstrapInitializedObjects();
-
-        glfwDestroyWindow(m_windowData.pWindow);
-        glfwTerminate();
     }
 
     void DescriptorAllocator::CleanupResources()

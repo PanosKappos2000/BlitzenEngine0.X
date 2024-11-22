@@ -6,13 +6,7 @@
 #include <string>
 #include <fstream>
 
-#define GLM_FORCE_DEPTH_ZERO_TO_ONE
-#include <glm/glm.hpp>
-#include <glm/vec3.hpp>
-#include <glm/vec4.hpp>
-#include <glm/mat4x4.hpp>
-#include "glm/gtx/transform.hpp"
-#include "glm/gtx/quaternion.hpp"
+#include "Core/math.h"
 
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
@@ -21,6 +15,7 @@
 
 //Checks if Blitzen starts with draw indirect available
 #define BLITZEN_START_VULKAN_WITH_INDIRECT 1
+#define BLITZEN_VULKAN_DRAW_DISTANCE 1000
 
 namespace BlitzenVulkan
 {
@@ -84,14 +79,18 @@ namespace BlitzenVulkan
         glm::vec4 color;
     };
 
+    //Passed to a uniform buffer descriptor set once per frame
     struct alignas(16)SceneData
     {
         glm::vec4 sunlightColor;
         glm::vec4 sunlightDirection;
         glm::vec4 ambientColor;
+
+        //These will save view and clip coordinates from the camera to pass them to the shaders
         glm::mat4 viewMatrix;
         glm::mat4 projectionMatrix;
         glm::mat4 projectionViewMatrix;
+
         //The scene data will be used to pass the vertex buffer address, this will probably need to be changed later
         VkDeviceAddress vertexBufferAddress; 
         //The scene data will be used to pass the material constants buffer address, this will probably need to be changed later
@@ -134,9 +133,8 @@ namespace BlitzenVulkan
 
         MaterialInstance* pMaterial;
 
-        //Data used for frustum culling
-        glm::vec3 center = glm::vec3(0);
-        float radius = 0;
+        glm::vec3 center;
+        float radius;
     };
 
     struct MeshAsset
@@ -219,6 +217,10 @@ namespace BlitzenVulkan
         glm::vec3 center;
         //Saves data used for frustum culling
         float radius;
+        bool bVisible;
+
+        glm::vec3 position;
+        float scale;
     };
 
     //Holds the commands for a specific draw call with multi draw indirect and also some per draw data
@@ -252,7 +254,9 @@ namespace BlitzenVulkan
     struct VulkanStats
     {
         #if BLITZEN_START_VULKAN_WITH_INDIRECT
-            bool drawIndirectMode = false;
+            bool drawIndirectMode = true;
+        #else 
+            const bool drawIndirectMode = false;
         #endif
     };
 
@@ -298,4 +302,7 @@ namespace BlitzenVulkan
 
         void ClearAll();
     };
+
+    //Gets generic data from the transform of an object that will be used for culling or other operations
+    void DecomposeTransform(glm::vec3& translation, glm::vec4& rotation, glm::vec3& scale, const glm::mat4& transform);
 }

@@ -4,7 +4,20 @@
 
 #include "BlitzenVulkan/vulkanRenderer.h"
 
-#include "Game/camera.h"
+//Has data that glfw will need to access on callback functions
+struct WindowData
+{
+    GLFWwindow* pWindow;
+    int width = 800;
+    int height = 650;
+    const char* title = "Blitzen0.X";
+    bool bWindowShouldClose = false;
+    bool bWindowResizeRequested = false;
+    double currentMouseX = 0;
+    double currentMouseY = 0;
+    //This will be used to call functions set by the user for certain inputs
+    BlitzenEngine::Controller* pController;
+};
 
 namespace BlitzenEngine
 {
@@ -18,9 +31,12 @@ namespace BlitzenEngine
         ~MainEngine();
     
     private:
-        BlitzenVulkan::VulkanRenderer m_vulkan;
 
-        bool* m_pbEngineShouldTerminate = nullptr;
+        //Creates the window with glfw
+        void glfwWindowInit();
+    
+    private:
+        BlitzenVulkan::VulkanRenderer m_vulkan;
 
         Camera m_mainCamera;
 
@@ -28,5 +44,7 @@ namespace BlitzenEngine
 
         float m_deltaTime = 0;
         float m_frameTime = 0;
+
+        WindowData m_windowData;
     };
 }

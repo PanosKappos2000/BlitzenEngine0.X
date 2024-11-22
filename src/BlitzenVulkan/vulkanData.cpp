@@ -22,6 +22,11 @@ namespace BlitzenVulkan
             //A mesh node's transform goes through one final modification, where it is multiplied by the scene's transform
             glm::mat4 finalMatrix = topMatrix * worldTransform;
 
+            glm::vec3 translation;
+            glm::vec3 scale;
+            glm::vec4 rotation;
+            DecomposeTransform(translation, rotation, scale, finalMatrix);
+
             //All the surfaces of the mesh will be added to the draw context, so it is resized in advance
             size_t startIndex = drawContext.opaqueRenderObjects.size();
             drawContext.opaqueRenderObjects.resize(drawContext.opaqueRenderObjects.size() + pMesh->surfaces.size());
@@ -41,6 +46,11 @@ namespace BlitzenVulkan
                 newObject.pMaterial = currentSurface.pMaterial;
                 //The object will also need the mesh's/node's final matrix
                 newObject.modelMatrix = finalMatrix;
+                newObject.center = currentSurface.center;
+                newObject.radius = currentSurface.radius;
+
+                newObject.position = translation;
+                newObject.scale = std::max(scale[0], std::max(scale[1], scale[2]));
 
                 //Setting up for draw indirect if it needs to be available
                 #if BLITZEN_START_VULKAN_WITH_INDIRECT
@@ -88,5 +98,23 @@ namespace BlitzenVulkan
         {
             vkDestroySampler(m_pRenderer->m_device, m_samplers[i], nullptr);
         }
+    }
+
+    void DecomposeTransform(glm::vec3& translation, glm::vec4& rotation, glm::vec3& scale, const glm::mat4& transform)
+    {
+        translation[0] = transform[3][0];
+	    translation[1] = transform[3][1];
+	    translation[2] = transform[3][2];
+
+	    //Compute determinant to determine handedness
+	    float det = transform[0][0] * (transform[1][1] * transform[2][2] - transform[2][1] * transform[1][2]) -
+	    transform[0][1] * (transform[1][0] * transform[2][2] - transform[1][2] * transform[2][0]) +
+	    transform[0][2] * (transform[1][0] * transform[2][1] - transform[1][1] * transform[2][0]);
+	    float sign = (det < 0.f) ? -1.f : 1.f;
+
+	    // recover scale from axis lengths
+	    scale[0] = sqrtf(transform[0][0] * transform[0][0] + transform[0][1] * transform[0][1] + transform[0][2] * transform[0][2]) * sign;
+	    scale[1] = sqrtf(transform[1][0] * transform[1][0] + transform[1][1] * transform[1][1] + transform[1][2] * transform[1][2]) * sign;
+	    scale[2] = sqrtf(transform[2][0] * transform[2][0] + transform[2][1] * transform[2][1] + transform[2][2] * transform[2][2]) * sign;
     }
 }

@@ -20,6 +20,7 @@ add_executable(BlitzenEngine
                 src/Game/camera.h
                 src/Input/controller.h
                 src/Input/controller.cpp
+                src/Core/math.h
                 
                 #External dependency source code that needs to be include for some libararies to work
                 ExternalDependencies/VkBootstrap/VkBootstrap.cpp
