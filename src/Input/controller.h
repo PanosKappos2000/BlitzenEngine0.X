@@ -17,7 +17,11 @@ namespace BlitzenEngine
     class Controller
     {
     public:
-        #define DEFAULT_LAMBDA              [](){std::cout << "Event not handled\n";}
+        #ifndef NDEBUG
+            #define DEFAULT_LAMBDA              [](){std::cout << "Event not handled\n";}
+        #else
+            #define DEFAULT_LAMBDA              [](){}
+        #endif
         #define DEFAULT_LAMBDA_ARRAY        {DEFAULT_LAMBDA, DEFAULT_LAMBDA, DEFAULT_LAMBDA}
 
         //The constructor will create all default function pointers and put them in the hash maps
@@ -30,7 +34,11 @@ namespace BlitzenEngine
         }
 
         //Holds the function pointer for cursor movement
-        std::function<void(float, float)> m_pfnCursor = [](float, float){std::cout << "Event not handled\n";};
+        #ifndef NDEBUG
+            std::function<void(float, float)> m_pfnCursor = [](float, float){std::cout << "Event not handled\n";};
+        #else
+            std::function<void(float, float)> m_pfnCursor = [](float, float){};
+        #endif
         inline void SetCursorFunctionPointer(std::function<void(float, float)> pfn) { m_pfnCursor = pfn; }
     };
 }

@@ -24,35 +24,31 @@ namespace BlitzenEngine
             #endif
         });
         m_mainController.SetKeyPressFunction(GLFW_KEY_W, GLFW_PRESS, [&](){
-            m_mainCamera.MoveCamera(glm::vec3(0.0f, 0.0f, -1.0f), 0.f, 0.f);
+            m_mainCamera.SetVelocityZ(-1);
         });
-        m_mainController.SetKeyPressFunction(GLFW_KEY_W, GLFW_REPEAT, [&](){
-            m_mainCamera.MoveCamera(glm::vec3(0.0f, 0.0f, -1.0f), 0.f, 0.f);
+        m_mainController.SetKeyPressFunction(GLFW_KEY_W, GLFW_RELEASE, [&](){
+            m_mainCamera.SetVelocityZ(0);
         });
-        m_mainController.SetKeyPressFunction(GLFW_KEY_W, GLFW_RELEASE, [&](){});
         m_mainController.SetKeyPressFunction(GLFW_KEY_S, GLFW_PRESS, [&](){
-            m_mainCamera.MoveCamera(glm::vec3(0.0f, 0.0f, 1.0f), 0.f, 0.f);
+            m_mainCamera.SetVelocityZ(1);
         });
-        m_mainController.SetKeyPressFunction(GLFW_KEY_S, GLFW_REPEAT, [&](){
-            m_mainCamera.MoveCamera(glm::vec3(0.0f, 0.0f, 1.0f), 0.f, 0.f);
+        m_mainController.SetKeyPressFunction(GLFW_KEY_S, GLFW_RELEASE, [&](){
+            m_mainCamera.SetVelocityZ(0);
         });
-        m_mainController.SetKeyPressFunction(GLFW_KEY_S, GLFW_RELEASE, [&](){});
         m_mainController.SetKeyPressFunction(GLFW_KEY_A, GLFW_PRESS, [&](){
-            m_mainCamera.MoveCamera(glm::vec3(-1.0f, 0.0f, 0.0f), 0.f, 0.f);
+            m_mainCamera.SetVelocityX(-1);
         });
-        m_mainController.SetKeyPressFunction(GLFW_KEY_A, GLFW_REPEAT, [&](){
-            m_mainCamera.MoveCamera(glm::vec3(-1.0f, 0.0f, 0.0f), 0.f, 0.f);
+        m_mainController.SetKeyPressFunction(GLFW_KEY_A, GLFW_RELEASE, [&](){
+            m_mainCamera.SetVelocityX(0);
         });
-        m_mainController.SetKeyPressFunction(GLFW_KEY_A, GLFW_RELEASE, [&](){});
         m_mainController.SetKeyPressFunction(GLFW_KEY_D, GLFW_PRESS, [&](){
-            m_mainCamera.MoveCamera(glm::vec3(1.0f, 0.0f, 0.0f), 0.f, 0.f);
+            m_mainCamera.SetVelocityX(1);
         });
-        m_mainController.SetKeyPressFunction(GLFW_KEY_D, GLFW_REPEAT, [&](){
-            m_mainCamera.MoveCamera(glm::vec3(1.0f, 0.0f, 0.0f), 0.f, 0.f);
+        m_mainController.SetKeyPressFunction(GLFW_KEY_D, GLFW_RELEASE, [&](){
+            m_mainCamera.SetVelocityX(0);
         });
-        m_mainController.SetKeyPressFunction(GLFW_KEY_D, GLFW_RELEASE, [&](){});
         m_mainController.SetCursorFunctionPointer([&](float x, float y) {
-            m_mainCamera.MoveCamera(glm::vec3(0.f, 0.f, 0.f), x, y);
+            m_mainCamera.RotateCamera(x, y);
         });
     }
 
@@ -104,6 +100,9 @@ namespace BlitzenEngine
             m_frameTime = updatedFrameTime;
 
             glfwPollEvents();
+            //Camera is update after events have bee polled
+            m_mainCamera.MoveCamera();
+            //Draw frame after camera has been updated
             m_vulkan.DrawFrame(m_mainCamera, m_windowData.bWindowResizeRequested);
 
             //Makse sure this is set to false so that the renderer does not keep recreating the swapchain

@@ -1140,23 +1140,25 @@ namespace BlitzenVulkan
         }
 
         //Start iterating through all the meshes that were loaded from gltf
+        meshAssets.resize(gltf.meshes.size());
         for(size_t i = 0; i < gltf.meshes.size(); ++i)
         {
             //Add a new mesh to the vulkan mesh assets array and save its name
             scene.m_meshes[gltf.meshes[i].name.c_str()] = MeshAsset();
-            meshAssets.push_back(&(scene.m_meshes[gltf.meshes[i].name.c_str()]));
-            MeshAsset* pMesh = meshAssets.back();
+            meshAssets[i] = &(scene.m_meshes[gltf.meshes[i].name.c_str()]);
+            MeshAsset* pMesh = meshAssets[i];
             pMesh->assetName = gltf.meshes[i].name;
-            size_t meshVertexCount = 0;
+            pMesh->surfaces.resize(gltf.meshes[i].primitives.size());
+            size_t surfaceIndex = 0;
             //Iterate through all the surfaces in the mesh asset
             for (auto& primitive : gltf.meshes[i].primitives)
             {
                 //Add a new geoSurface object at the back of the mesh assets array and update its indices
-                pMesh->surfaces.emplace_back(GeoSurface());
-                pMesh->surfaces.back().firstIndex = static_cast<uint32_t>(indices.size());
-                pMesh->surfaces.back().indexCount = static_cast<uint32_t>(gltf.accessors[primitive.indicesAccessor.value()].count);
-                GeoSurface& currentSurface = meshAssets.back()->surfaces.back();
+                GeoSurface& currentSurface = pMesh->surfaces[surfaceIndex];
+                currentSurface.firstIndex = static_cast<uint32_t>(indices.size());
+                currentSurface.indexCount = static_cast<uint32_t>(gltf.accessors[primitive.indicesAccessor.value()].count);
 
+                //The first vertex of this surface is the size of the vertices array before it start loading this surface's vertices
                 size_t initialVertex = vertices.size();
 
                 /* Load indices */
@@ -1179,14 +1181,21 @@ namespace BlitzenVulkan
                     newVertex.color = glm::vec4{ 1.f };
                     newVertex.uvMapX = 0;
                     newVertex.uvMapY = 0;
-                    //Add every surface to the center
-                    currentSurface.center += v;
                 });
-                currentSurface.center /= static_cast<float>(posAccessor.count);
-                for(size_t i = previousVerticesSize; i < vertices.size(); ++i)
+
+                //Derive the oriented bounding box of the surface
+                glm::vec3 minPos = vertices[initialVertex].position; 
+                glm::vec3 maxPos = vertices[initialVertex].position;
+                for(size_t i = initialVertex; i < vertices.size(); ++i)
                 {
-                    currentSurface.radius = std::max(currentSurface.radius, glm::distance(currentSurface.center, vertices[i].position));
+                    minPos = glm::min(minPos, vertices[initialVertex].position);
+                    maxPos = glm::max(maxPos, vertices[initialVertex].position);
                 }
+                currentSurface.obb.origin = (minPos + maxPos) * 0.5f;
+                currentSurface.obb.extents = (maxPos - minPos) * 0.5f;
+
+                //Using the oriented bounding box the bounding sphere can also be derived
+                float radius = glm::length(currentSurface.obb.extents);
 
                 /* Load normals */
                 auto normals = primitive.findAttribute("NORMAL");
@@ -1226,12 +1235,13 @@ namespace BlitzenVulkan
                 //If the primitive has a material, it retrieves its index and saves it, otherwise it get the first material
                 if (primitive.materialIndex.has_value())
                 {
-                    meshAssets.back()->surfaces.back().pMaterial = materials[primitive.materialIndex.value()];
+                    pMesh->surfaces[surfaceIndex].pMaterial = materials[primitive.materialIndex.value()];
                 } 
                 else 
                 {
-                    meshAssets.back()->surfaces.back().pMaterial = materials[0];
+                    pMesh->surfaces[surfaceIndex].pMaterial = materials[0];
                 }
+                ++surfaceIndex;
             }
         }
 
@@ -1389,7 +1399,7 @@ namespace BlitzenVulkan
 
 
         //Default lighting parameters
-        m_globalSceneData.ambientColor = glm::vec4(.1f);
+        m_globalSceneData.ambientColor = glm::vec4(1.f);
         m_globalSceneData.sunlightColor = glm::vec4(1.f);
         m_globalSceneData.sunlightDirection = glm::vec4(0, 1, 0.5, 1.f);
         //Give the address of the shared vertex buffer to the global scene data
@@ -1410,7 +1420,7 @@ namespace BlitzenVulkan
         frustumData[4] = m_globalSceneData.projectionViewMatrix[3] + m_globalSceneData.projectionViewMatrix[2];
         frustumData[5] = m_globalSceneData.projectionViewMatrix[3] - m_globalSceneData.projectionViewMatrix[2];
         //If indirect mode is not active frustum culling is done on the cpu
-        if(!stats.drawIndirectMode)
+        /*if(!stats.drawIndirectMode)
         {
             for(RenderObject& object : m_mainDrawContext.opaqueRenderObjects)
             {
@@ -1423,7 +1433,7 @@ namespace BlitzenVulkan
                 }
                 object.bVisible = visible;
             }
-        }
+        }*/
 
         //Getting the tools that will be used this frame
         VkCommandBuffer& frameCommandBuffer = m_frameTools[m_currentFrame].graphicsCommandBuffer;

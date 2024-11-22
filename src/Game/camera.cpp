@@ -9,15 +9,12 @@ namespace BlitzenEngine
         m_pWindowWidth = pWindowWidth;
         m_pWindowHeight = pWindowHeight;
 
-        MoveCamera(glm::vec3(0.f, 0.f, 0.f), 0.f , 0.f);
+        RotateCamera(0.f, 0.f);
+        MoveCamera();
     }
 
-    void Camera::MoveCamera(const glm::vec3& velocity, float yawMovement, float pitchMovement)
+    void Camera::RotateCamera(float yawMovement, float pitchMovement)
     {
-        /*
-        The cursor is active outside the window right now so, it is capable of teleporting the camera with huge values.
-        This is undesirable, so it needs to be guarded against with these if statements
-        */
         if(yawMovement < 100.f && yawMovement > -100.f)
         {
             m_yaw += (yawMovement * m_sensitivity * (*m_pDeltaTime)) / 100.f;
@@ -29,12 +26,15 @@ namespace BlitzenEngine
 
         glm::quat pitchRotation = glm::angleAxis(m_pitch, glm::vec3(1.0f, 0.f, 0.f));
         glm::quat yawRotation = glm::angleAxis(m_yaw, glm::vec3(0.f, -1.f, 0.f));
-        glm::mat4 rotationMatrix = glm::toMat4(yawRotation) * glm::toMat4(pitchRotation);
+        m_rotationMatrix = glm::toMat4(yawRotation) * glm::toMat4(pitchRotation);
+    }
 
-        m_position += glm::vec3(rotationMatrix * glm::vec4(velocity * (*m_pDeltaTime) * m_speed, 0.f));
+    void Camera::MoveCamera()
+    {
+        m_position += glm::vec3(m_rotationMatrix * glm::vec4(m_velocity * (*m_pDeltaTime) * m_speed, 0.f));
         glm::mat4 translationMatrix = glm::translate(glm::mat4(1.f), m_position);
 
-        m_viewMatrix = glm::inverse(translationMatrix * rotationMatrix);
+        m_viewMatrix = glm::inverse(translationMatrix * m_rotationMatrix);
         m_projectionMatrix = glm::perspective(glm::radians(m_fovY), static_cast<float>(*m_pWindowWidth) / static_cast<float>(*m_pWindowHeight), m_zNear, m_zFar);
     }
 }

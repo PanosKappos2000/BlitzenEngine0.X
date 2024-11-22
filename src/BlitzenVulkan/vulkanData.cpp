@@ -46,8 +46,8 @@ namespace BlitzenVulkan
                 newObject.pMaterial = currentSurface.pMaterial;
                 //The object will also need the mesh's/node's final matrix
                 newObject.modelMatrix = finalMatrix;
-                newObject.center = currentSurface.center;
-                newObject.radius = currentSurface.radius;
+                newObject.obb.extents = currentSurface.obb.extents;
+                newObject.obb.origin = currentSurface.obb.origin;
 
                 newObject.position = translation;
                 newObject.scale = std::max(scale[0], std::max(scale[1], scale[2]));
@@ -64,8 +64,9 @@ namespace BlitzenVulkan
                     //Update object data so that it can be drawn properly from with the shader
                     drawContext.indirectDrawData[i].worldMatrix = finalMatrix;
                     drawContext.indirectDrawData[i].materialIndex = currentSurface.pMaterial->materialIndex;
-                    drawContext.surfaceFrustumCollisions[i].center = currentSurface.center;
-                    drawContext.surfaceFrustumCollisions[i].radius = currentSurface.radius;
+                    //Giving the bounding object to the surface frustum collision so that it can be passed to a draw indirect buffer
+                    drawContext.surfaceFrustumCollisions[i].origin = currentSurface.obb.origin;
+                    drawContext.surfaceFrustumCollisions[i].extents = currentSurface.obb.extents;
                 #endif
             }
         }

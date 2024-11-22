@@ -15,7 +15,7 @@
 
 //Checks if Blitzen starts with draw indirect available
 #define BLITZEN_START_VULKAN_WITH_INDIRECT 1
-#define BLITZEN_VULKAN_DRAW_DISTANCE 1000
+#define BLITZEN_FRUSTUM_CULLING_BOUNDING_SPHERE 0
 
 namespace BlitzenVulkan
 {
@@ -79,6 +79,18 @@ namespace BlitzenVulkan
         glm::vec4 color;
     };
 
+    struct OrientedBoundingBox
+    {
+        glm::vec3 origin;
+        glm::vec3 extents;
+    };
+
+    struct BoundingSphere
+    {
+        glm::vec3 center;
+        float radius;
+    };
+
     //Passed to a uniform buffer descriptor set once per frame
     struct alignas(16)SceneData
     {
@@ -133,8 +145,7 @@ namespace BlitzenVulkan
 
         MaterialInstance* pMaterial;
 
-        glm::vec3 center;
-        float radius;
+        OrientedBoundingBox obb;
     };
 
     struct MeshAsset
@@ -213,12 +224,16 @@ namespace BlitzenVulkan
         //This specifies the model matrix with which
         glm::mat4 modelMatrix;
 
-        //Saves data used for frustum culling
-        glm::vec3 center;
-        //Saves data used for frustum culling
-        float radius;
-        bool bVisible;
+        //Saves the oriented bounding box of the surface to do frustum culling
+        OrientedBoundingBox obb;
 
+        //If frustum culling is done using a boudning sphere, this is used
+        BoundingSphere sphereCollision;
+
+        //Once frustum culling is complete every render object will have this set to false or true which will dictate if they get rendered or not
+        bool bVisible = true;
+
+        //When being added to the draw context each object has its worldTransorm decomposed to get the scale, position and rotation of the object
         glm::vec3 position;
         float scale;
     };
@@ -236,8 +251,13 @@ namespace BlitzenVulkan
 
     struct alignas(16) FrustumCollisionData
     {
-        glm::vec3 center;
-        float radius;
+        #if BLITZEN_FRUSTUM_CULLING_BOUNDING_SPHERE
+            glm::vec3 center;
+            float radius;
+        #else
+            glm::vec3 origin;
+            glm::vec3 extents;
+        #endif
     };
 
     struct DrawContext

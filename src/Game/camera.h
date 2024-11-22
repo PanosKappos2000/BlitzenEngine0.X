@@ -9,12 +9,19 @@ namespace BlitzenEngine
     public:
         void Init(float* pDeltaTime, const int* windowWidth, const int* windowHeight);
 
-        void MoveCamera(const glm::vec3& velocity, float yawMovement, float pitchMovement);
+        void MoveCamera();
+
+        void RotateCamera(float yawMovement, float pitchMovement);
 
         inline const glm::mat4& GetViewMatrix() const {return m_viewMatrix;}
         inline const glm::mat4& GetProjectionMatrix() const {return m_projectionMatrix;}
 
         void ChangeProjectionMatrix(float fovY, float zNear, float zFar);
+
+        //The parameter of these function should only take the values -1, 0 and 1 (I should add some protection against undesirable values)
+        inline void SetVelocityX(int8_t x) {m_velocity.x = static_cast<float>(x);}
+        inline void SetVelocityY(int8_t y) {m_velocity.y = static_cast<float>(y);}
+        inline void SetVelocityZ(int8_t z) {m_velocity.z = static_cast<float>(z);}
     
     public:
 
@@ -22,16 +29,20 @@ namespace BlitzenEngine
         const int* m_pWindowHeight;
 
     private:
+        
+        //Dictates how much the camera should move each frame(if at all)
+        glm::vec3 m_velocity = {0.f, 0.f, 0.f};
 
         //Keeps track of the delta time of the engine so that movement is the same speed no matter the fps
-        float* m_pDeltaTime;
+        float* m_pDeltaTime = nullptr;
 
         //Used to set the translation of the view matrix
         glm::vec3 m_position = glm::vec3(0.f, 0.f, -5.f);
 
-        //Used to set the rotation of the view matrix
+        //Dictate the current direction of the camera and sets the current rotation matrix
         float m_pitch = 0;
         float m_yaw = 0;
+        glm::mat4 m_rotationMatrix = glm::mat4(1.f);
 
         //Data for how fast the camera should move and change direction
         float m_sensitivity = 10.f;
@@ -43,8 +54,8 @@ namespace BlitzenEngine
         float m_zFar = 0.1f;
 
         //Transforms all objects to view coordinates
-        glm::mat4 m_viewMatrix;
+        glm::mat4 m_viewMatrix = glm::mat4(1.f);
         //Transforms all objects to clip coordinates
-        glm::mat4 m_projectionMatrix;
+        glm::mat4 m_projectionMatrix = glm::mat4(1.f);
     };
 }
