@@ -146,6 +146,7 @@ namespace BlitzenVulkan
         MaterialInstance* pMaterial;
 
         OrientedBoundingBox obb;
+        BoundingSphere sphereCollision;
     };
 
     struct MeshAsset

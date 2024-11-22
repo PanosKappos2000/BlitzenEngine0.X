@@ -48,6 +48,8 @@ namespace BlitzenVulkan
                 newObject.modelMatrix = finalMatrix;
                 newObject.obb.extents = currentSurface.obb.extents;
                 newObject.obb.origin = currentSurface.obb.origin;
+                newObject.sphereCollision.center = currentSurface.sphereCollision.center;
+                newObject.sphereCollision.radius = currentSurface.sphereCollision.radius;
 
                 newObject.position = translation;
                 newObject.scale = std::max(scale[0], std::max(scale[1], scale[2]));

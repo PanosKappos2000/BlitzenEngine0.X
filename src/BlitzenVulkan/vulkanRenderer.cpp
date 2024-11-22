@@ -50,17 +50,17 @@ namespace BlitzenVulkan
         m_scenes["city"].AddToDrawContext(glm::translate(glm::mat4(1.f), glm::vec3(0.f, 0.f, -300.f)), m_mainDrawContext);
         #ifdef NDEBUG
         float iter = 1;
-        for (float f = 0.f; f < 10.f; f += 1.f)
+        for (float f = 0.f; f < 1000.f; f += 1.f)
         {
             iter *= -1;
             m_scenes["city"].AddToDrawContext(glm::translate(glm::mat4(1.f), glm::vec3(-iter, iter, -f)), m_mainDrawContext);
         }
-        for (float f = 0.f; f < 10.f; f += 1.f)
+        for (float f = 0.f; f < 100.f; f += 1.f)
         {
             iter *= -1;
             m_scenes["city"].AddToDrawContext(glm::translate(glm::mat4(1.f), glm::vec3(iter, f, -iter)), m_mainDrawContext);
         }
-        for (float f = 0.f; f < 10.f; f += 1.f)
+        for (float f = 0.f; f < 100.f; f += 1.f)
         {
             iter *= -1;
             m_scenes["city"].AddToDrawContext(glm::translate(glm::mat4(1.f), glm::vec3(f, -iter, iter)), m_mainDrawContext);
@@ -129,7 +129,9 @@ namespace BlitzenVulkan
 
         VkPhysicalDeviceVulkan11Features vulkan11Features{};
         vulkan11Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
-        vulkan11Features.shaderDrawParameters = true;
+        #if BLITZEN_START_VULKAN_WITH_INDIRECT
+            vulkan11Features.shaderDrawParameters = true;
+        #endif
 
         VkPhysicalDeviceFeatures vulkanFeatures{};
         #if BLITZEN_START_VULKAN_WITH_INDIRECT
@@ -1193,8 +1195,10 @@ namespace BlitzenVulkan
                 }
                 currentSurface.obb.origin = (minPos + maxPos) * 0.5f;
                 currentSurface.obb.extents = (maxPos - minPos) * 0.5f;
-
                 //Using the oriented bounding box the bounding sphere can also be derived
+                currentSurface.sphereCollision.center.x = glm::distance(maxPos.x, minPos.x) /** 0.5f*/;
+                currentSurface.sphereCollision.center.y = glm::distance(maxPos.y, minPos.y) /** 0.5f*/;
+                currentSurface.sphereCollision.center.z = glm::distance(maxPos.z, minPos.z) /** 0.5f*/;
                 float radius = glm::length(currentSurface.obb.extents);
 
                 /* Load normals */
@@ -1417,23 +1421,23 @@ namespace BlitzenVulkan
         frustumData[1] = m_globalSceneData.projectionViewMatrix[3] - m_globalSceneData.projectionViewMatrix[0];
         frustumData[2] = m_globalSceneData.projectionViewMatrix[3] + m_globalSceneData.projectionViewMatrix[1];
         frustumData[3] = m_globalSceneData.projectionViewMatrix[3] - m_globalSceneData.projectionViewMatrix[1];
-        frustumData[4] = m_globalSceneData.projectionViewMatrix[3] + m_globalSceneData.projectionViewMatrix[2];
-        frustumData[5] = m_globalSceneData.projectionViewMatrix[3] - m_globalSceneData.projectionViewMatrix[2];
+        frustumData[4] = m_globalSceneData.projectionViewMatrix[3] - m_globalSceneData.projectionViewMatrix[2];
+        frustumData[5] = glm::vec4(0, 0, -1, 10000.f);
         //If indirect mode is not active frustum culling is done on the cpu
-        /*if(!stats.drawIndirectMode)
+        if(!stats.drawIndirectMode)
         {
             for(RenderObject& object : m_mainDrawContext.opaqueRenderObjects)
             {
                 bool visible = true;
                 for(size_t i = 0; i < 6; ++i)
                 {
-                    glm::vec3 center = m_globalSceneData.projectionViewMatrix * glm::vec4((object.center * object.scale + object.position), 1.f); 
-                    float radius = object.radius * object.scale;
+                    glm::vec3 center = m_globalSceneData.projectionViewMatrix * object.modelMatrix * glm::vec4((object.sphereCollision.center), 1.f); 
+                    float radius = object.sphereCollision.radius * object.scale;
                     visible = visible && (glm::dot(frustumData[i], glm::vec4(center, 1)) > -radius);
                 }
                 object.bVisible = visible;
             }
-        }*/
+        }
 
         //Getting the tools that will be used this frame
         VkCommandBuffer& frameCommandBuffer = m_frameTools[m_currentFrame].graphicsCommandBuffer;
