@@ -3,8 +3,6 @@
 #include "vulkanData.h"
 #include "vulkanPipelines.h"
 
-#include "VkBootstrap.h"
-
 //I really don't like including gameplay elements in the renderer, I want to fix this in the future
 #include "Input/controller.h"
 
@@ -100,8 +98,7 @@ namespace BlitzenVulkan
 
     private:
 
-        //Initializes the objects that are part of VkBootstrapObjects using the vkBootstrap library
-        void VkBootstrapInitializationHelp();
+        void CreateSwapchain(int* pWidth, int* pHeight);
 
         void InitAllocator();
 

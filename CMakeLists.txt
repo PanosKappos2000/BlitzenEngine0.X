@@ -17,6 +17,8 @@ add_executable(BlitzenEngine
                 src/BlitzenVulkan/vulkanData.h
                 src/BlitzenVulkan/vulkanPipelines.h
                 src/BlitzenVulkan/vulkanPipelines.cpp
+                src/BlitzenVulkan/vulkanInit.cpp
+
                 src/Game/camera.cpp
                 src/Game/camera.h
 
@@ -29,7 +31,6 @@ add_executable(BlitzenEngine
                 src/Core/blitAssert.h
                 
                 #External dependency source code that needs to be include for some libararies to work
-                ExternalDependencies/VkBootstrap/VkBootstrap.cpp
                 ExternalDependencies/fastgltf/src/fastgltf.cpp
                 ExternalDependencies/fastgltf/src/base64.cpp
                 ExternalDependencies/fastgltf/src/simdjson.cpp)
@@ -47,7 +48,6 @@ target_include_directories(BlitzenEngine PUBLIC
                     "${PROJECT_SOURCE_DIR}/src"
                     "${PROJECT_SOURCE_DIR}/ExternalDependencies/glfw/include"
                     "${PROJECT_SOURCE_DIR}/ExternalDependencies/Vulkan/include"
-                    "${PROJECT_SOURCE_DIR}/ExternalDependencies/VkBootstrap"
                     "${PROJECT_SOURCE_DIR}/ExternalDependencies/fastgltf/include"
                     "${PROJECT_SOURCE_DIR}/ExternalDependencies/STBImage")
 
