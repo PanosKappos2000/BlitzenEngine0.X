@@ -427,9 +427,119 @@ namespace BlitzenVulkan
                     swapchainInfo.imageColorSpace = surfaceFormats[0].surfaceFormat.colorSpace;
                 }
             }
+
+            /* Present mode */
+            {
+                // Retrieve the presentation modes supported, to look for the desired one
+                uint32_t presentModeCount = 0;
+                VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(m_bootstrapObjects.chosenGPU, m_bootstrapObjects.surface, &presentModeCount, nullptr));
+                std::vector<VkPresentModeKHR> presentModes(static_cast<size_t>(presentModeCount));
+                VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(m_bootstrapObjects.chosenGPU, m_bootstrapObjects.surface, &presentModeCount, 
+                presentModes.data()))
+                // Look for the desired presentation mode
+                uint8_t found = 0;
+                for(size_t i = 0; i < presentModes.size(); ++i)
+                {
+                    // If the desired presentation mode is found, set the swapchain info to that
+                    if(presentModes[i] == DESIRED_SWAPCHAIN_PRESENTATION_MODE)
+                    {
+                        swapchainInfo.presentMode = DESIRED_SWAPCHAIN_PRESENTATION_MODE;
+                        found = 1;
+                        break;
+                    }
+                }
+                
+                // If it was not found, set it to this random smuck ( Don't worry, I'm a proffesional )
+                if(!found)
+                {
+                    swapchainInfo.presentMode = VK_PRESENT_MODE_FIFO_KHR;
+                }
+            }
+
+            //Set the swapchain extent to the window's width and height
+            m_bootstrapObjects.swapchainExtent = {static_cast<uint32_t>(*m_pWindowWidth), static_cast<uint32_t>(*m_pWindowHeight)};
+            // Retrieve surface capabilities to properly configure some swapchain values
+            VkSurfaceCapabilities2KHR surfaceCapabilities{};
+            surfaceCapabilities.sType = VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_2_KHR;
+            VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilities2KHR(m_bootstrapObjects.chosenGPU, &surfaceInfo, &surfaceCapabilities));
+
+            /* Swapchain extent */
+            {
+                // Get the swapchain extent from the surface capabilities, if it is not some weird value
+                if(surfaceCapabilities.surfaceCapabilities.currentExtent.width != UINT32_MAX)
+                {
+                    m_bootstrapObjects.swapchainExtent = surfaceCapabilities.surfaceCapabilities.currentExtent;
+                }
+
+                // Get the min extent and max extent allowed by the GPU,  to clamp the initial value
+                VkExtent2D minExtent = surfaceCapabilities.surfaceCapabilities.minImageExtent;
+                VkExtent2D maxExtent = surfaceCapabilities.surfaceCapabilities.maxImageExtent;
+                m_bootstrapObjects.swapchainExtent.width = std::clamp(m_bootstrapObjects.swapchainExtent.width, maxExtent.width, minExtent.width);
+                m_bootstrapObjects.swapchainExtent.height = std::clamp(m_bootstrapObjects.swapchainExtent.height, maxExtent.height, minExtent.height);
+
+                // Swapchain extent fully checked and ready to pass to the swapchain info
+                swapchainInfo.imageExtent = m_bootstrapObjects.swapchainExtent;
+            }
+
+            /* Min image count */
+            {
+                uint32_t imageCount = surfaceCapabilities.surfaceCapabilities.minImageCount + 1;
+                // Check that image count did not supass max image count
+                if(surfaceCapabilities.surfaceCapabilities.maxImageCount > 0 && surfaceCapabilities.surfaceCapabilities.maxImageCount < imageCount )
+                {
+                    imageCount = surfaceCapabilities.surfaceCapabilities.maxImageCount;
+                }
+
+                // Swapchain image count fully check and ready to be pass to the swapchain info
+                swapchainInfo.minImageCount = imageCount;
+            }
+
+            swapchainInfo.preTransform = surfaceCapabilities.surfaceCapabilities.currentTransform;
+
+            if (m_queues.graphicsIndex != m_queues.presentIndex)
+            {
+                uint32_t queueFamilyIndices[] = {m_queues.graphicsIndex, m_queues.presentIndex};
+                swapchainInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+                swapchainInfo.queueFamilyIndexCount = 2;
+                swapchainInfo.pQueueFamilyIndices = queueFamilyIndices;
+            } 
+            else 
+            {
+                swapchainInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+                swapchainInfo.queueFamilyIndexCount = 0;// Unnecessary if the indices are the same
+            }
+
+            // Create the swapchain
+            VK_CHECK(vkCreateSwapchainKHR(m_device, &swapchainInfo, m_pCustomAllocator, &m_bootstrapObjects.swapchain));
+
+            // Retrieve the swapchain images
+            uint32_t swapchainImageCount = 0;
+            VK_CHECK(vkGetSwapchainImagesKHR(m_device, m_bootstrapObjects.swapchain, &swapchainImageCount, nullptr))
+            m_bootstrapObjects.swapchainImages.resize(swapchainImageCount);
+            VK_CHECK(vkGetSwapchainImagesKHR(m_device, m_bootstrapObjects.swapchain, &swapchainImageCount, m_bootstrapObjects.swapchainImages.data()))
+
+            // Create image view for each swapchain image
+            m_bootstrapObjects.swapchainImageViews.resize(static_cast<size_t>(swapchainImageCount));
+            for(size_t i = 0; i < m_bootstrapObjects.swapchainImageViews.size(); ++i)
+            {
+                VkImageViewCreateInfo info{};
+                info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+                info.pNext = nullptr;
+                info.flags = 0;
+                info.image = m_bootstrapObjects.swapchainImages[i];
+                info.format = m_bootstrapObjects.swapchainImageFormat;
+                info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+                info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT; // Not sure if this is needed, as a seperate color attachment will be used 
+                info.subresourceRange.baseMipLevel = 1;
+                info.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+                info.subresourceRange.baseArrayLayer = 1;
+                info.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+
+                VK_CHECK(vkCreateImageView(m_device, &info, m_pCustomAllocator, &(m_bootstrapObjects.swapchainImageViews[i])))
+            }
         }
 
-        VkBootstrapInitializationHelp();
+        //VkBootstrapInitializationHelp();
         InitAllocator();
         InitCommands();
     }
@@ -1905,8 +2015,11 @@ namespace BlitzenVulkan
 
         //Acquire the next image in the swapchain, so that rendering results can be presented on the window
         uint32_t swapchainImageIndex;
-        vkAcquireNextImageKHR(m_device, m_bootstrapObjects.swapchain, 1000000000, m_frameTools[m_currentFrame].imageAcquiredSemaphore,
-        VK_NULL_HANDLE, &swapchainImageIndex);
+        //VK_CHECK(vkAcquireNextImageKHR(m_device, m_bootstrapObjects.swapchain, 1000000000, 
+        //m_frameTools[m_currentFrame].imageAcquiredSemaphore,VK_NULL_HANDLE, &swapchainImageIndex));
+
+        VkResult rese = vkAcquireNextImageKHR(m_device, m_bootstrapObjects.swapchain, 1000000000, m_frameTools[m_currentFrame].imageAcquiredSemaphore,
+            VK_NULL_HANDLE, &swapchainImageIndex);
 
         //Reset the timestamp before recording commands
         //#ifndef NDEBUG
