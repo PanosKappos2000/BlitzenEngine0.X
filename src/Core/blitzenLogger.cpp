@@ -1,5 +1,6 @@
 #include "blitLogger.h"
 #include "blitAssert.h"
+#include "Platform/blitPlatform.h"
 
 // Need this for string formatting
 #include <stdarg.h>
@@ -29,6 +30,15 @@ namespace BlitzenCore
         // Pass out message to a clean buffer to be printed out
         char outMessage2[3200];
         sprintf(outMessage2, "%s%s\n", logLevels[static_cast<uint8_t>(level)], outMessage);
+
+        if(isError)
+        {
+            BlitzenPlatform::ConsoleError(message, static_cast<uint8_t>(level));
+        }
+        else
+        {
+            BlitzenPlatform::ConsoleWrite(message, static_cast<uint8_t>(level));
+        }
     }
 
     void ReportAssertionFailure(const char* expression, const char* message, const char* file, int32_t line)

@@ -88,17 +88,17 @@ namespace BlitzenVulkan
     class VulkanRenderer
     {
     public:
-        void Init(GLFWwindow* pWindow, int* pWidth, int* pHeight);
+        void Init(void* pState, uint32_t* pWidth, uint32_t* pHeight);
 
         void UploadDataToGPU();
 
-        void DrawFrame(const BlitzenEngine::Camera& camera, bool bWindowResize);
+        void DrawFrame(const BlitzenEngine::Camera& camera);
 
         void CleanupResources();
 
     private:
 
-        void CreateSwapchain(int* pWidth, int* pHeight);
+        void CreateSwapchain(uint32_t* pWidth, uint32_t* pHeight);
 
         void InitAllocator();
 
@@ -167,9 +167,8 @@ namespace BlitzenVulkan
 
     public:
 
-        GLFWwindow* m_pWindow;
-        int* m_pWindowWidth;
-        int* m_pWindowHeight;
+        uint32_t* m_pWindowWidth;
+        uint32_t* m_pWindowHeight;
 
         //Holds some variables that change the way the renderer works
         VulkanStats stats;

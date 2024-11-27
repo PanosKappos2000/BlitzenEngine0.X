@@ -1,4 +1,5 @@
 #include "vulkanRenderer.h"
+#include "Platform/blitPlatform.h"
 
 namespace BlitzenVulkan
 {
@@ -35,9 +36,8 @@ namespace BlitzenVulkan
     // Validation layers function pointers
 
 
-    void VulkanRenderer::Init(GLFWwindow* pWindow, int* pWidth, int* pHeight)
+    void VulkanRenderer::Init(void* pState, uint32_t* pWidth, uint32_t* pHeight)
     {
-        m_pWindow = pWindow;
         m_pWindowWidth = pWidth;
         m_pWindowHeight = pHeight; 
 
@@ -74,7 +74,7 @@ namespace BlitzenVulkan
 
             // Creating an array of required extension names to pass to ppEnabledExtensionNames
             const char* requiredExtensionNames [BLITZEN_VULKAN_ENABLED_EXTENSION_COUNT];
-            requiredExtensionNames[0] =  /*VULKAN_SURFACE_KHR_EXTENSION_NAME This needs to be defined in platform specific code later */ "VK_KHR_win32_surface";
+            requiredExtensionNames[0] =  VULKAN_SURFACE_KHR_EXTENSION_NAME;
             requiredExtensionNames[1] = "VK_KHR_surface";        
             instanceInfo.enabledExtensionCount = BLITZEN_VULKAN_ENABLED_EXTENSION_COUNT;
 
@@ -159,12 +159,10 @@ namespace BlitzenVulkan
 
 
 
-        /*{
-            BlitzenPlatform::PlatformState* pTrueState = reinterpret_cast<BlitzenPlatform::PlatformState*>(pPlatformState);
-            BlitzenPlatform::CreateVulkanSurface(pTrueState, m_initHandles.instance, m_initHandles.surface, m_pCustomAllocator);
-        }*///TODO: Get the platform specific code from BlitzenC
-
-        VK_CHECK(glfwCreateWindowSurface(m_bootstrapObjects.instance, m_pWindow, nullptr, &(m_bootstrapObjects.surface)));
+        {
+            BlitzenPlatform::PlatformState* pTrueState = reinterpret_cast<BlitzenPlatform::PlatformState*>(pState);
+            BlitzenPlatform::CreateVulkanSurface(pTrueState, m_bootstrapObjects.instance, m_bootstrapObjects.surface, m_pCustomAllocator);
+        }
 
         /*
             Physical device (GPU representation) selection
@@ -376,9 +374,9 @@ namespace BlitzenVulkan
         InitCommands();
     }
 
-    void VulkanRenderer::CreateSwapchain(int* pWidth, int* pHeight)
+    void VulkanRenderer::CreateSwapchain(uint32_t* pWidth, uint32_t* pHeight)
     {
-        m_bootstrapObjects.swapchainExtent = {static_cast<uint32_t>(*pWidth), static_cast<uint32_t>(*pHeight)};
+        m_bootstrapObjects.swapchainExtent = {*pWidth, *pHeight};
 
         // This will be needed to find some details about swapchain support
         VkPhysicalDeviceSurfaceInfo2KHR surfaceInfo{};

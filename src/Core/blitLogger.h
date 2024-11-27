@@ -33,37 +33,37 @@ namespace BlitzenCore
     void BlitLog(LogLevel level, const char* message, ...);
 
     #if BLITZEN_LOG_FATAL
-        #define BLIT_FATAL(message, ...)     Log(BlitzenCore::LogLevel::Fatal, message, ##__VA_ARGS__);
+        #define BLIT_FATAL(message, ...)     BlitzenCore::BlitLog(BlitzenCore::LogLevel::Fatal, message, ##__VA_ARGS__);
     #else
         #define BLIT_FATAL(message, ...)    ;
     #endif
 
     #if BLITZEN_LOG_ERROR
-        #define BLIT_ERROR(message, ...)     Log(BlitzenCore::LogLevel::Error, message, ##__VA_ARGS__);
+        #define BLIT_ERROR(message, ...)     BlitzenCore::BlitLog(BlitzenCore::LogLevel::Error, message, ##__VA_ARGS__);
     #else
         #define BLIT_ERROR(message, ...)    ;
     #endif
 
     #if BLITZEN_LOG_INFO
-        #define BLIT_INFO(message, ...)      Log(BlitzenCore::LogLevel::Info, message, ##__VA_ARGS__);
+        #define BLIT_INFO(message, ...)      BlitzenCore::BlitLog(BlitzenCore::LogLevel::Info, message, ##__VA_ARGS__);
     #else
         #define BLIT_INFO(message, ...)      ;
     #endif
 
     #if BLITZEN_LOG_WARNINGS
-        #define BLIT_WARN(message, ...)     Log(BlitzenCore::LogLevel::Warn, message, ##__VA_ARGS__);
+        #define BLIT_WARN(message, ...)     BlitzenCore::BlitLog(BlitzenCore::LogLevel::Warn, message, ##__VA_ARGS__);
     #else
         #define BLIT_WARN(message, ...)     ;
     #endif
 
     #if BLITZEN_LOG_DEBUG
-        #define BLIT_DBLOG(message, ...)     Log(BlitzenCore::LogLevel::Debug, message, __VA_ARGS__);
+        #define BLIT_DBLOG(message, ...)     BlitzenCore::BlitLog(BlitzenCore::LogLevel::Debug, message, __VA_ARGS__);
     #else
         #define BLIT_DBLOG(message, ...)    ;
     #endif
 
     #if BLITZEN_LOG_TRACE
-        #define BLIT_TRACE(message, ...)     Log(BlitzenCore::LogLevel::Trace, message, __VA_ARGS__);
+        #define BLIT_TRACE(message, ...)     BlitzenCore::BlitLog(BlitzenCore::LogLevel::Trace, message, __VA_ARGS__);
     #else
         #define BLIT_TRACE(message, ...)    ;
     #endif

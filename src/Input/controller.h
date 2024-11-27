@@ -5,8 +5,6 @@
 #include <array>
 #include <unordered_map>
 
-#include <GLFW/glfw3.h>
-
 namespace BlitzenEngine
 {
     /*--------------------------------------------------------------------------------------------------------

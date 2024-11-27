@@ -1265,9 +1265,10 @@ namespace BlitzenVulkan
     /*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     This is where all rendering commands during the game loop occur.
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*/
-    void VulkanRenderer::DrawFrame(const BlitzenEngine::Camera& camera, bool bWindowResize)
+    void VulkanRenderer::DrawFrame(const BlitzenEngine::Camera& camera)
     {
-        if(bWindowResize)
+        // No way to know this for now, since I removed GLFW
+        if(false)
         {
             BootstrapRecreateSwapchain();
         }
@@ -1347,7 +1348,6 @@ namespace BlitzenVulkan
             double frameGPU = gpuEnd - gpuStart;
             char title[256];
             sprintf_s(title, "GPU: %lf", frameGPU);
-            glfwSetWindowTitle(m_pWindow, title);
         //#endif
 
 

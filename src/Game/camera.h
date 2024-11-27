@@ -7,7 +7,7 @@ namespace BlitzenEngine
     class Camera
     {
     public:
-        void Init(float* pDeltaTime, const int* windowWidth, const int* windowHeight);
+        void Init(float* pDeltaTime, const uint32_t* windowWidth, const uint32_t* windowHeight);
 
         void MoveCamera();
 
@@ -25,8 +25,8 @@ namespace BlitzenEngine
     
     public:
 
-        const int* m_pWindowWidth;
-        const int* m_pWindowHeight;
+        const uint32_t* m_pWindowWidth;
+        const uint32_t* m_pWindowHeight;
 
     private:
         

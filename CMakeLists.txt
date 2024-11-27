@@ -29,6 +29,9 @@ add_executable(BlitzenEngine
                 src/Core/blitLogger.h
                 src/Core/blitzenLogger.cpp
                 src/Core/blitAssert.h
+
+                src/Platform/blitPlatform.h
+                src/Platform/blitzenPlatform.cpp
                 
                 #External dependency source code that needs to be include for some libararies to work
                 ExternalDependencies/fastgltf/src/fastgltf.cpp
@@ -40,13 +43,11 @@ add_subdirectory(ExternalDependencies/glfw)
 target_link_directories(BlitzenEngine PUBLIC
                         "${PROJECT_SOURCE_DIR}/ExternalDependencies/Vulkan/Lib")
 
-target_link_libraries(BlitzenEngine PUBLIC 
-                        glfw 
+target_link_libraries(BlitzenEngine PUBLIC  
                         vulkan-1)
 
 target_include_directories(BlitzenEngine PUBLIC
                     "${PROJECT_SOURCE_DIR}/src"
-                    "${PROJECT_SOURCE_DIR}/ExternalDependencies/glfw/include"
                     "${PROJECT_SOURCE_DIR}/ExternalDependencies/Vulkan/include"
                     "${PROJECT_SOURCE_DIR}/ExternalDependencies/fastgltf/include"
                     "${PROJECT_SOURCE_DIR}/ExternalDependencies/STBImage")

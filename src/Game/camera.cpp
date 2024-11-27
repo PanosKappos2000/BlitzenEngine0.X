@@ -2,7 +2,7 @@
 
 namespace BlitzenEngine
 {
-    void Camera::Init(float* pDeltaTime, const int* pWindowWidth, const int* pWindowHeight)
+    void Camera::Init(float* pDeltaTime, const uint32_t* pWindowWidth, const uint32_t* pWindowHeight)
     {
         //Storing the delta time, as it will be constantly used in camera functions, I'll probably do this differently in the future
         m_pDeltaTime = pDeltaTime;
