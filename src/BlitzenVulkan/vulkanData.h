@@ -7,11 +7,27 @@
 #include <fstream>
 
 #include "Core/math.h"
+#include "Core/blitAssert.h"
 
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
 #include "vma/vk_mem_alloc.h"
+
+// These macros will be used to initalize VkApplicationInfo which will be passed to VkInstanceCreateInfo
+#define BLITZEN_VULKAN_USER_APPLICATION                         "Blitzen Game"
+#define BLITZEN_VULKAN_USER_APPLICATION_VERSION                 VK_MAKE_VERSION (1, 0, 0)
+#define BLITZEN_VULKAN_USER_ENGINE                              "Blitzen Engine"
+#define BLITZEN_VULKAN_USER_ENGINE_VERSION                      VK_MAKE_VERSION (1, 0, 0)
+
+#ifdef NDEBUG
+    #define BLITZEN_VULKAN_ENABLED_EXTENSION_COUNT                  2
+    #define VK_CHECK(expr)                                          expr;
+#else
+    #define BLITZEN_VULKAN_ENABLED_EXTENSION_COUNT                  3
+    #define VALIDATION_LAYER_NAME                                   "VK_LAYER_KHRONOS_validation"
+    #define VK_CHECK(expr)                                          BLIT_ASSERT(expr == VK_SUCCESS)
+#endif
 
 //Checks if Blitzen starts with draw indirect available
 #define BLITZEN_START_VULKAN_WITH_INDIRECT 1

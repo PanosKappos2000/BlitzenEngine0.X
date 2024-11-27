@@ -47,12 +47,15 @@ namespace BlitzenVulkan
     {
         VkQueue graphicsQueue;
         uint32_t graphicsIndex;
+        bool hasGraphicsIndex = false;
 
         VkQueue presentQueue;
         uint32_t presentIndex;
+        bool hasPresentIndex = false;
 
         VkQueue computeQueue;
         uint32_t computeIndex;
+        bool hasComputeIndex = false;
     };
 
     //This struct is used for commands outside the frame loop, while still in the initialization stage
@@ -186,6 +189,9 @@ namespace BlitzenVulkan
 
         //Used to indicate which index of the frame tools list should be used
         uint32_t m_currentFrame = 0;
+
+        // Might use this later
+        VkAllocationCallbacks* m_pCustomAllocator = nullptr;
 
         VkBootstrapObjects m_bootstrapObjects;
         Queues m_queues;

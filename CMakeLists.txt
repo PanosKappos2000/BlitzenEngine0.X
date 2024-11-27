@@ -10,6 +10,7 @@ set (CMAKE_CXX_STANDARD_REQUIRED True)
 add_executable(BlitzenEngine
                 src/mainEngine.cpp
                 src/mainEngine.h
+
                 src/BlitzenVulkan/vulkanRenderer.h
                 src/BlitzenVulkan/vulkanRenderer.cpp
                 src/BlitzenVulkan/vulkanData.cpp
@@ -18,9 +19,14 @@ add_executable(BlitzenEngine
                 src/BlitzenVulkan/vulkanPipelines.cpp
                 src/Game/camera.cpp
                 src/Game/camera.h
+
                 src/Input/controller.h
                 src/Input/controller.cpp
+
                 src/Core/math.h
+                src/Core/blitLogger.h
+                src/Core/blitzenLogger.cpp
+                src/Core/blitAssert.h
                 
                 #External dependency source code that needs to be include for some libararies to work
                 ExternalDependencies/VkBootstrap/VkBootstrap.cpp
