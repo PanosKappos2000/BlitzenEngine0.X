@@ -69,7 +69,7 @@ namespace BlitzenVulkan
         LoadScene(testScene, "structure", vertices, indices, materialConstants, materialResources);
         LoadScene(testScene2, "city", vertices, indices, materialConstants, materialResources);
         //Update every node in the scene to be included in the draw context
-        m_scenes["city"].AddToDrawContext(glm::mat4(1.f), m_mainDrawContext);
+        m_scenes["structure"].AddToDrawContext(glm::mat4(1.f), m_mainDrawContext);
         m_scenes["city"].AddToDrawContext(glm::translate(glm::mat4(1.f), glm::vec3(0.f, 0.f, 0)), m_mainDrawContext);
         #ifdef NDEBUG
         float iter = 1;
