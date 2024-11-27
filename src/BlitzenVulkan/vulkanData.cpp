@@ -53,6 +53,7 @@ namespace BlitzenVulkan
 
                 newObject.position = translation;
                 newObject.scale = std::max(scale[0], std::max(scale[1], scale[2]));
+                newObject.orientation = glm::quat(rotation);
 
                 //Setting up for draw indirect if it needs to be available
                 #if BLITZEN_START_VULKAN_WITH_INDIRECT
@@ -119,5 +120,27 @@ namespace BlitzenVulkan
 	    scale[0] = sqrtf(transform[0][0] * transform[0][0] + transform[0][1] * transform[0][1] + transform[0][2] * transform[0][2]) * sign;
 	    scale[1] = sqrtf(transform[1][0] * transform[1][0] + transform[1][1] * transform[1][1] + transform[1][2] * transform[1][2]) * sign;
 	    scale[2] = sqrtf(transform[2][0] * transform[2][0] + transform[2][1] * transform[2][1] + transform[2][2] * transform[2][2]) * sign;
+
+        // normalize axes to get a pure rotation matrix
+	    float rsx = (scale[0] == 0.f) ? 0.f : 1.f / scale[0];
+	    float rsy = (scale[1] == 0.f) ? 0.f : 1.f / scale[1];
+	    float rsz = (scale[2] == 0.f) ? 0.f : 1.f / scale[2];
+
+        float r00 = transform[0][0] * rsx, r10 = transform[1][0] * rsy, r20 = transform[2][0] * rsz;
+	    float r01 = transform[0][1] * rsx, r11 = transform[1][1] * rsy, r21 = transform[2][1] * rsz;
+	    float r02 = transform[0][2] * rsx, r12 = transform[1][2] * rsy, r22 = transform[2][2] * rsz;
+
+        int qc = r22 < 0 ? (r00 > r11 ? 0 : 1) : (r00 < -r11 ? 2 : 3);
+	    float qs1 = qc & 2 ? -1.f : 1.f;
+	    float qs2 = qc & 1 ? -1.f : 1.f;
+	    float qs3 = (qc - 1) & 2 ? -1.f : 1.f;
+
+        float qt = 1.f - qs3 * r00 - qs2 * r11 - qs1 * r22;
+	    float qs = 0.5f / sqrtf(qt);
+
+	    rotation[qc ^ 0] = qs * qt;
+	    rotation[qc ^ 1] = qs * (r01 + qs1 * r10);
+	    rotation[qc ^ 2] = qs * (r20 + qs2 * r02);
+	    rotation[qc ^ 3] = qs * (r12 + qs3 * r21);
     }
 }

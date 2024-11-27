@@ -14,77 +14,9 @@ namespace BlitzenVulkan
         m_pWindowWidth = pWidth;
         m_pWindowHeight = pHeight; 
 
-        VkBootstrapInitializationHelp();
+        
         InitAllocator();
         InitCommands();
-
-        //Setup rendering attachments(depth and color image)
-        AllocateImage(m_drawingAttachment, 
-        VkExtent3D{static_cast<uint32_t>(*m_pWindowWidth), static_cast<uint32_t>(*m_pWindowHeight), 1}, 
-        VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | 
-        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT);
-        AllocateImage(m_depthAttachment, 
-        VkExtent3D{static_cast<uint32_t>(*m_pWindowWidth), static_cast<uint32_t>(*m_pWindowHeight), 1}, 
-        VK_FORMAT_D32_SFLOAT, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
-        m_drawExtent.width = *m_pWindowWidth;
-        m_drawExtent.height = *m_pWindowHeight;
-
-        InitPlaceholderTextures();
-
-
-
-        //Temporarily holds all vertices, once every scene and asset is loaded, it will all be uploaded in a unified storage buffer
-        std::vector<Vertex> vertices;
-        //Temporarily holds all indices, once every scene and asset is loaded, it will all be uploaded in a unified index buffer
-        std::vector<uint32_t> indices;
-        //Temporarily holds all material constants, once every scene and asset is loaded, it will all be uploaded in a unified storage buffer
-        std::vector<MaterialConstants> materialConstants;
-        //Temporarily holds all material resources, once every scene and asset is loaded, it will all written to two uniform buffer arrays
-        std::vector<MaterialResources> materialResources;
-        std::string testScene = "Assets/structure.glb";
-        std::string testScene2 = "Assets/Highpoly.glb";
-        LoadScene(testScene, "structure", vertices, indices, materialConstants, materialResources);
-        LoadScene(testScene2, "city", vertices, indices, materialConstants, materialResources);
-        //Update every node in the scene to be included in the draw context
-        m_scenes["structure"].AddToDrawContext(glm::mat4(1.f), m_mainDrawContext);
-        m_scenes["city"].AddToDrawContext(glm::translate(glm::mat4(1.f), glm::vec3(0.f, 0.f, -300.f)), m_mainDrawContext);
-        #ifdef NDEBUG
-        float iter = 1;
-        for (float f = 0.f; f < 1000.f; f += 1.f)
-        {
-            iter *= -1;
-            m_scenes["city"].AddToDrawContext(glm::translate(glm::mat4(1.f), glm::vec3(-iter, iter, -f)), m_mainDrawContext);
-        }
-        for (float f = 0.f; f < 100.f; f += 1.f)
-        {
-            iter *= -1;
-            m_scenes["city"].AddToDrawContext(glm::translate(glm::mat4(1.f), glm::vec3(iter, f, -iter)), m_mainDrawContext);
-        }
-        for (float f = 0.f; f < 100.f; f += 1.f)
-        {
-            iter *= -1;
-            m_scenes["city"].AddToDrawContext(glm::translate(glm::mat4(1.f), glm::vec3(f, -iter, iter)), m_mainDrawContext);
-        }
-        #endif
-
-        #if BLITZEN_START_VULKAN_WITH_INDIRECT
-            InitComputePipelines();
-        #endif
-
-        //This probably needs a better interface but it does its job for now
-        InitMainMaterialData(static_cast<uint32_t>(materialResources.size()));
-
-        InitFrameTools();
-        
-        //Upload all global buffers to GPU, if indirect is acitve, it will also upload the indirect commands
-        #if BLITZEN_START_VULKAN_WITH_INDIRECT
-            UploadGlobalBuffersToGPU(vertices, indices, materialConstants, m_mainDrawContext.indirectDrawData);
-        #else
-            std::vector<DrawIndirectData> emptyIndirect;
-            UploadGlobalBuffersToGPU(vertices, indices, materialConstants, emptyIndirect);
-        #endif
-        //Write all material resources to the global descriptor set
-        UploadMaterialResourcesToGPU(materialResources);
     }
 
     void VulkanRenderer::VkBootstrapInitializationHelp()
@@ -227,6 +159,77 @@ namespace BlitzenVulkan
         commandBufferInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 
         vkAllocateCommandBuffers(m_device, &commandBufferInfo, &m_commands.commandBuffer);
+    }
+
+    void VulkanRenderer::UploadDataToGPU()
+    {
+        //Setup rendering attachments(depth and color image)
+        AllocateImage(m_drawingAttachment, 
+        VkExtent3D{static_cast<uint32_t>(*m_pWindowWidth), static_cast<uint32_t>(*m_pWindowHeight), 1}, 
+        VK_FORMAT_R16G16B16A16_SFLOAT, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | 
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT);
+        AllocateImage(m_depthAttachment, 
+        VkExtent3D{static_cast<uint32_t>(*m_pWindowWidth), static_cast<uint32_t>(*m_pWindowHeight), 1}, 
+        VK_FORMAT_D32_SFLOAT, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
+        m_drawExtent.width = *m_pWindowWidth;
+        m_drawExtent.height = *m_pWindowHeight;
+
+        InitPlaceholderTextures();
+
+
+
+        //Temporarily holds all vertices, once every scene and asset is loaded, it will all be uploaded in a unified storage buffer
+        std::vector<Vertex> vertices;
+        //Temporarily holds all indices, once every scene and asset is loaded, it will all be uploaded in a unified index buffer
+        std::vector<uint32_t> indices;
+        //Temporarily holds all material constants, once every scene and asset is loaded, it will all be uploaded in a unified storage buffer
+        std::vector<MaterialConstants> materialConstants;
+        //Temporarily holds all material resources, once every scene and asset is loaded, it will all written to two uniform buffer arrays
+        std::vector<MaterialResources> materialResources;
+        std::string testScene = "Assets/structure.glb";
+        std::string testScene2 = "Assets/Highpoly.glb";
+        LoadScene(testScene, "structure", vertices, indices, materialConstants, materialResources);
+        LoadScene(testScene2, "city", vertices, indices, materialConstants, materialResources);
+        //Update every node in the scene to be included in the draw context
+        m_scenes["city"].AddToDrawContext(glm::mat4(1.f), m_mainDrawContext);
+        m_scenes["city"].AddToDrawContext(glm::translate(glm::mat4(1.f), glm::vec3(0.f, 0.f, 0)), m_mainDrawContext);
+        #ifdef NDEBUG
+        float iter = 1;
+        for (float f = 0.f; f < 100.f; f += 1.f)
+        {
+            iter *= -1;
+            m_scenes["city"].AddToDrawContext(glm::translate(glm::mat4(1.f), glm::vec3(-iter, iter, -f)), m_mainDrawContext);
+        }
+        for (float f = 0.f; f < 100.f; f += 1.f)
+        {
+            iter *= -1;
+            m_scenes["city"].AddToDrawContext(glm::translate(glm::mat4(1.f), glm::vec3(iter, f, -iter)), m_mainDrawContext);
+        }
+        for (float f = 0.f; f < 100.f; f += 1.f)
+        {
+            iter *= -1;
+            m_scenes["city"].AddToDrawContext(glm::translate(glm::mat4(1.f), glm::vec3(f, -iter, iter)), m_mainDrawContext);
+        }
+        #endif
+
+        #if BLITZEN_START_VULKAN_WITH_INDIRECT
+            InitComputePipelines();
+        #endif
+
+        //This probably needs a better interface but it does its job for now
+        InitMainMaterialData(static_cast<uint32_t>(materialResources.size()));
+
+        InitFrameTools();
+        
+        //Upload all global buffers to GPU, if indirect is acitve, it will also upload the indirect commands
+        #if BLITZEN_START_VULKAN_WITH_INDIRECT
+            UploadGlobalBuffersToGPU(vertices, indices, materialConstants, m_mainDrawContext.indirectDrawData);
+        #else
+            std::vector<DrawIndirectData> emptyIndirect;
+            UploadGlobalBuffersToGPU(vertices, indices, materialConstants, emptyIndirect);
+        #endif
+        //Write all material resources to the global descriptor set
+        UploadMaterialResourcesToGPU(materialResources);
     }
 
     void VulkanRenderer::StartRecordingCommands()
@@ -1417,11 +1420,11 @@ namespace BlitzenVulkan
         Initializing frustum culling data
         */
         glm::vec4 frustumData[6];
-        frustumData[0] = m_globalSceneData.projectionViewMatrix[3] + m_globalSceneData.projectionViewMatrix[0];
-        frustumData[1] = m_globalSceneData.projectionViewMatrix[3] - m_globalSceneData.projectionViewMatrix[0];
-        frustumData[2] = m_globalSceneData.projectionViewMatrix[3] + m_globalSceneData.projectionViewMatrix[1];
-        frustumData[3] = m_globalSceneData.projectionViewMatrix[3] - m_globalSceneData.projectionViewMatrix[1];
-        frustumData[4] = m_globalSceneData.projectionViewMatrix[3] - m_globalSceneData.projectionViewMatrix[2];
+        frustumData[0] = m_globalSceneData.viewMatrix[3] + m_globalSceneData.viewMatrix[0];
+        frustumData[1] = m_globalSceneData.viewMatrix[3] - m_globalSceneData.viewMatrix[0];
+        frustumData[2] = m_globalSceneData.viewMatrix[3] + m_globalSceneData.viewMatrix[1];
+        frustumData[3] = m_globalSceneData.viewMatrix[3] - m_globalSceneData.viewMatrix[1];
+        frustumData[4] = m_globalSceneData.viewMatrix[3] - m_globalSceneData.viewMatrix[2];
         frustumData[5] = glm::vec4(0, 0, -1, 10000.f);
         //If indirect mode is not active frustum culling is done on the cpu
         if(!stats.drawIndirectMode)
@@ -1431,7 +1434,7 @@ namespace BlitzenVulkan
                 bool visible = true;
                 for(size_t i = 0; i < 6; ++i)
                 {
-                    glm::vec3 center = m_globalSceneData.projectionViewMatrix * object.modelMatrix * glm::vec4((object.sphereCollision.center), 1.f); 
+                    glm::vec3 center = object.modelMatrix * glm::vec4((object.sphereCollision.center), 1.f); 
                     float radius = object.sphereCollision.radius * object.scale;
                     visible = visible && (glm::dot(frustumData[i], glm::vec4(center, 1)) > -radius);
                 }

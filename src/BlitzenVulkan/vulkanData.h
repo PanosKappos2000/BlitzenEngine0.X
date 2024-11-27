@@ -49,6 +49,12 @@ namespace BlitzenVulkan
         VkDescriptorPool GetDescriptorPool();
     };
 
+    struct VulkanStats
+    {
+        bool drawIndirectMode = true;
+        bool hasDiscreteGPU = false;
+    };
+
     //All images the renderer will be allocated using vma and will depend on this struct
     struct AllocatedImage
     {
@@ -237,6 +243,7 @@ namespace BlitzenVulkan
         //When being added to the draw context each object has its worldTransorm decomposed to get the scale, position and rotation of the object
         glm::vec3 position;
         float scale;
+        glm::quat orientation;
     };
 
     //Holds the commands for a specific draw call with multi draw indirect and also some per draw data
@@ -269,15 +276,6 @@ namespace BlitzenVulkan
         #if BLITZEN_START_VULKAN_WITH_INDIRECT
             std::vector<DrawIndirectData> indirectDrawData;
             std::vector<FrustumCollisionData> surfaceFrustumCollisions;
-        #endif
-    };
-
-    struct VulkanStats
-    {
-        #if BLITZEN_START_VULKAN_WITH_INDIRECT
-            bool drawIndirectMode = true;
-        #else 
-            const bool drawIndirectMode = false;
         #endif
     };
 

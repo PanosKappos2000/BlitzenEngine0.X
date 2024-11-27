@@ -89,6 +89,10 @@ namespace BlitzenEngine
             pUserPointer->currentMouseY = ypos;
             });
 
+        // Loads scenes and actually get ready to draw. Some of the stuff that this does should not normally be up to the renderer
+        // TODO: Change this, so that the scene data is loaded by another system and this just passes data to the GPU
+        m_vulkan.UploadDataToGPU();
+
         //Give frame time the current time before the loop starts, so that the delta time does not get a huge value at the start
         m_frameTime = static_cast<float>(glfwGetTime());
 

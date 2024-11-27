@@ -89,6 +89,8 @@ namespace BlitzenVulkan
     public:
         void Init(GLFWwindow* pWindow, int* pWidth, int* pHeight);
 
+        void UploadDataToGPU();
+
         void DrawFrame(const BlitzenEngine::Camera& camera, bool bWindowResize);
 
         void CleanupResources();
