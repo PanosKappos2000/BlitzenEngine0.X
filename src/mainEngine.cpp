@@ -28,6 +28,8 @@ namespace BlitzenEngine
         //Loops until an event occurs that causes the engine to terminate
         while(isRunning)
         {
+            BlitzenPlatform::PlatformPumpMessages(&platformState);
+
             m_clock.elapsed = BlitzenPlatform::GetAbsoluteTime() - m_clock.startTime;
             m_frameTime = m_clock.elapsed - previousTime;
             previousTime = m_clock.elapsed;
@@ -63,6 +65,12 @@ namespace BlitzenEngine
 
 void main()
 {
-    BlitzenEngine::MainEngine engine;
-    engine.MainEngineLoop();
+    BlitzenCore::MemoryManagementInit();
+
+    {
+        BlitzenEngine::MainEngine engine;
+        engine.MainEngineLoop();
+    }
+
+    BlitzenCore::MemoryManagementShutdown();
 }

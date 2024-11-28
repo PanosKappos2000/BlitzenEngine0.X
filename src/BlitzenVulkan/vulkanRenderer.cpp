@@ -821,7 +821,7 @@ namespace BlitzenVulkan
     void VulkanRenderer::LoadScene(std::string& filepath, const char* sceneName, std::vector<Vertex>& vertices, 
     std::vector<uint32_t>& indices, std::vector<MaterialConstants>& materialConstants, std::vector<MaterialResources>& materialResources)
     {
-        std::cout << "Loading GLTF: " << filepath << '\n';
+        BLIT_INFO("Loading GLTF: %s", filepath.c_str())
 
         m_scenes[sceneName] = LoadedScene();
         LoadedScene& scene = m_scenes[sceneName];
@@ -836,8 +836,8 @@ namespace BlitzenVulkan
         fastgltf::GltfDataBuffer data;
         if(!data.loadFromFile(filepath))
         {
-            std::cout << "failed to find filepath\n";
-            //__debugbreak();
+            BLIT_ERROR("Failed to find filepath, GLTF loading abandoned")
+            return;
         }
 
         fastgltf::Asset gltf;
@@ -854,7 +854,7 @@ namespace BlitzenVulkan
             } 
             else 
             {
-                std::cerr << "Failed to load glTF: " << fastgltf::to_underlying(load.error()) << std::endl;
+                BLIT_ERROR("Failed to load glTF: %i", fastgltf::to_underlying(load.error()))
                 return;
             }
         } 
@@ -867,13 +867,13 @@ namespace BlitzenVulkan
             } 
             else 
             {
-                std::cerr << "Failed to load glTF: " << fastgltf::to_underlying(load.error()) << std::endl;
+                BLIT_ERROR("Failed to load glTF: %i", fastgltf::to_underlying(load.error()))
                 return;
             }
         } 
         else 
         {
-            std::cerr << "Failed to determine glTF container" << std::endl;
+            BLIT_ERROR("Failed to determine glTF container")
             return;
         }
 

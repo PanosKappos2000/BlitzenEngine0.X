@@ -25,6 +25,11 @@ add_executable(BlitzenEngine
                 src/Input/controller.h
                 src/Input/controller.cpp
 
+                src/Core/blitMemory.h
+                src/Core/blitzenMemory.cpp
+                src/Core/blitzenContainerLibrary.h
+                src/Core/blitEvents.h
+                src/Core/blitzenEvents.cpp
                 src/Core/math.h
                 src/Core/blitLogger.h
                 src/Core/blitzenLogger.cpp
@@ -37,8 +42,6 @@ add_executable(BlitzenEngine
                 ExternalDependencies/fastgltf/src/fastgltf.cpp
                 ExternalDependencies/fastgltf/src/base64.cpp
                 ExternalDependencies/fastgltf/src/simdjson.cpp)
-
-add_subdirectory(ExternalDependencies/glfw)
 
 target_link_directories(BlitzenEngine PUBLIC
                         "${PROJECT_SOURCE_DIR}/ExternalDependencies/Vulkan/Lib")

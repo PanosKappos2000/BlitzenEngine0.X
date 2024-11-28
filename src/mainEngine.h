@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Platform/blitPlatform.h"
+#include "Core/blitzenContainerLibrary.h"
 
 #include "BlitzenVulkan/vulkanRenderer.h"
 

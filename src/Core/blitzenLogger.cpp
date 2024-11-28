@@ -10,7 +10,7 @@ namespace BlitzenCore
     void BlitLog(LogLevel level, const char* message, ...)
     {
         const char* logLevels[static_cast<size_t>(LogLevel::MaxLevel)] = {"{FATAL}: ", "{ERROR}: ", "{Info}: ", "{Warning}: ", "{Debug}: ", "{Trace}: "};
-        uint8_t isError = level < LogLevel::Warn;
+        uint8_t isError = level < LogLevel::Info;
 
         //Temporary to avoid dynamic arrays for now
         char outMessage[3200];
@@ -33,11 +33,11 @@ namespace BlitzenCore
 
         if(isError)
         {
-            BlitzenPlatform::ConsoleError(message, static_cast<uint8_t>(level));
+            BlitzenPlatform::ConsoleError(outMessage2, static_cast<uint8_t>(level));
         }
         else
         {
-            BlitzenPlatform::ConsoleWrite(message, static_cast<uint8_t>(level));
+            BlitzenPlatform::ConsoleWrite(outMessage2, static_cast<uint8_t>(level));
         }
     }
 
