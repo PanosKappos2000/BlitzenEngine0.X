@@ -2,6 +2,7 @@
 
 #include "Platform/blitPlatform.h"
 #include "Core/blitzenContainerLibrary.h"
+#include "Core/blitEvents.h"
 
 #include "BlitzenVulkan/vulkanRenderer.h"
 
@@ -24,18 +25,35 @@ namespace BlitzenEngine
 
     struct Clock
     {
-        double startTime;
-        double elapsed;
+        float startTime;
+        float elapsed;
     };
 
-    class MainEngine
+    struct EngineSystems
+    {
+        uint8_t loggingSystem = 0;
+
+        uint8_t eventSystem = 0;
+        // This will be held by the engine and not a static variable, so that the dynamic arrays can be cleaned up on shutdown
+        BlitzenCore::EventSystemState eventSystemState;
+
+        uint8_t inputSystem = 0;
+    };
+
+    class Engine
     {
     public:
-        MainEngine();
+        Engine();
 
         void MainEngineLoop();
 
-        ~MainEngine();
+        ~Engine();
+        inline void RequestShutdown() { isRunning = 0; }
+
+        inline static Engine* GetEngineInstancePointer() {return m_pEngine;}
+        inline EngineSystems& GetEngineSystems() {return m_systems;}
+
+        inline Camera& GetMainCamera() { return m_mainCamera; }
     
     private:
 
@@ -44,10 +62,14 @@ namespace BlitzenEngine
     
     private:
 
+        static Engine* m_pEngine;
+
         BlitzenVulkan::VulkanRenderer m_vulkan;
 
         BlitzenPlatform::PlatformState platformState;
         PlatformData platformData;
+
+        EngineSystems m_systems;
 
         Camera m_mainCamera;
 
@@ -56,8 +78,12 @@ namespace BlitzenEngine
         Clock m_clock;
 
         float m_deltaTime = 0;
-        float m_frameTime = 0;
 
         uint8_t isRunning = 0;
     };
+
+
+    uint8_t OnEvent(BlitzenCore::BlitEventType eventType, void* pSender, void* pListener, BlitzenCore::EventContext data);
+
+    uint8_t OnKeyPress(BlitzenCore::BlitEventType eventType, void* pSender, void* pListener, BlitzenCore::EventContext data);
 }

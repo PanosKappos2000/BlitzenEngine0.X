@@ -32,7 +32,7 @@ namespace BlitzenCore
 
     void* BlitAlloc(AllocationType alloc, size_t size);
     void BlitFree(AllocationType alloc, void* pBlock, size_t size);
-    void* BlitMemoryCopy(void* pDst, void* pSrc, size_t size);
-    void* BlitMemorySet(void* pDst, int32_t value, size_t size);
-    void* BlitMemoryZero(void* pDst, size_t size);
+    void BlitMemoryCopy(void* pDst, void* pSrc, size_t size);
+    void BlitMemorySet(void* pDst, int32_t value, size_t size);
+    void BlitMemoryZero(void* pDst, size_t size);
 }

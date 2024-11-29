@@ -31,7 +31,7 @@ namespace BlitzenEngine
 
     void Camera::MoveCamera()
     {
-        m_position += glm::vec3(m_rotationMatrix * glm::vec4(m_velocity * (*m_pDeltaTime) * m_speed, 0.f));
+        m_position += glm::vec3(m_rotationMatrix * glm::vec4(m_velocity /** (*m_pDeltaTime) * m_speed*/ *0.1f, 0.f));
         glm::mat4 translationMatrix = glm::translate(glm::mat4(1.f), m_position);
 
         m_viewMatrix = glm::inverse(translationMatrix * m_rotationMatrix);

@@ -1,4 +1,5 @@
 #include "blitPlatform.h"
+#include "Core/blitEvents.h"
 
 namespace BlitzenPlatform
 {
@@ -16,7 +17,7 @@ namespace BlitzenPlatform
             HINSTANCE windowsInstance;
         };
 
-        static double clockFrequency;
+        static float clockFrequency;
         static LARGE_INTEGER startTime;
 
         // Will be given as a function pointer to be called by window when an event occurs
@@ -101,7 +102,7 @@ namespace BlitzenPlatform
             // Clock setup, similar thing to glfwGetTime
             LARGE_INTEGER frequency;
             QueryPerformanceCounter(&frequency);
-            clockFrequency = 1.0 / static_cast<double>(frequency.QuadPart);// The quad part is just a 64 bit integer
+            clockFrequency = 1.0 / static_cast<float>(frequency.QuadPart);// The quad part is just a 64 bit integer
             QueryPerformanceCounter(&startTime);
 
             // Tell the engine that the function was successful
@@ -117,11 +118,11 @@ namespace BlitzenPlatform
             }
         }
 
-        double GetAbsoluteTime()
+        float GetAbsoluteTime()
         {
             LARGE_INTEGER nowTime;
             QueryPerformanceCounter(&nowTime);
-            return static_cast<double>(nowTime.QuadPart * clockFrequency);
+            return static_cast<float>(nowTime.QuadPart) * clockFrequency;
         }
 
         void PSleep(uint64_t ms)
@@ -236,29 +237,29 @@ namespace BlitzenPlatform
                 case WM_KEYUP:
                 case WM_SYSKEYUP: 
                 {
-                    /*// Key pressed/released
+                    // Key pressed/released
                     uint8_t pressed = (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN);
                     BlitzenCore::BlitKey key = static_cast<BlitzenCore::BlitKey>(w_param);
-                    BlitzenCore::InputProcessKey(key, pressed);*/
+                    BlitzenCore::InputProcessKey(key, pressed);
                     break;
                 } 
                 case WM_MOUSEMOVE: 
                 {
-                    /*// Mouse move
+                    // Mouse move
                     int32_t mouseX = GET_X_LPARAM(l_param);
                     int32_t mouseY = GET_Y_LPARAM(l_param);
-                    BlitzenCore::InputProcessMouseMove(mouseX, mouseY);*/
+                    BlitzenCore::InputProcessMouseMove(mouseX, mouseY);
                     break;
                 } 
                 case WM_MOUSEWHEEL: 
                 {
-                    /*int32_t zDelta = GET_WHEEL_DELTA_WPARAM(w_param);
+                    int32_t zDelta = GET_WHEEL_DELTA_WPARAM(w_param);
                     if (zDelta != 0) 
                     {
                         // Flatten the input to an OS-independent (-1, 1)
                         zDelta = (zDelta < 0) ? -1 : 1;
                         BlitzenCore::InputProcessMouseWheel(zDelta);
-                    }*/
+                    }
                    break;
                 }
                 case WM_LBUTTONDOWN:
@@ -268,7 +269,7 @@ namespace BlitzenPlatform
                 case WM_MBUTTONUP:
                 case WM_RBUTTONUP: 
                 {
-                    /*uint8_t bPressed = (msg == WM_LBUTTONDOWN || msg == WM_RBUTTONDOWN || msg == WM_MBUTTONDOWN);
+                    uint8_t bPressed = (msg == WM_LBUTTONDOWN || msg == WM_RBUTTONDOWN || msg == WM_MBUTTONDOWN);
                     BlitzenCore::MouseButton button = BlitzenCore::MouseButton::MaxButtons;
                     switch(msg)
                     {
@@ -292,7 +293,7 @@ namespace BlitzenPlatform
                         }
                     }
                     if(button != BlitzenCore::MouseButton::MaxButtons)
-                        BlitzenCore::InputProcessButton(button, bPressed);*/
+                        BlitzenCore::InputProcessButton(button, bPressed);
                     break;
                 } 
             }
