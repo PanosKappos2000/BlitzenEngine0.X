@@ -1265,20 +1265,22 @@ namespace BlitzenVulkan
     /*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     This is where all rendering commands during the game loop occur.
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*/
-    void VulkanRenderer::DrawFrame(const BlitzenEngine::Camera& camera)
+    void VulkanRenderer::DrawFrame(RenderContext& context)
     {
         // No way to know this for now, since I removed GLFW
-        if(false)
+        if(context.bResize)
         {
             BootstrapRecreateSwapchain();
         }
+
+        BlitzenEngine::Camera* pCamera = reinterpret_cast<BlitzenEngine::Camera*>(context.pCamera);
 
         /*-------------------------------
         Setting up the global scene data
         ---------------------------------*/
         //Setup the projection and view matrix
-        m_globalSceneData.viewMatrix = camera.GetViewMatrix();
-        m_globalSceneData.projectionMatrix = camera.GetProjectionMatrix();
+        m_globalSceneData.viewMatrix = pCamera->GetViewMatrix();
+        m_globalSceneData.projectionMatrix = pCamera->GetProjectionMatrix();
         //Invert the projection matrix so that it matches glm and objects are not drawn upside down
         m_globalSceneData.projectionMatrix[1][1] *= -1;
         m_globalSceneData.projectionViewMatrix = m_globalSceneData.projectionMatrix * m_globalSceneData.viewMatrix;

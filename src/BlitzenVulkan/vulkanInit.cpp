@@ -30,7 +30,7 @@ namespace BlitzenVulkan
     static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, 
     VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData) 
     {
-        std::cerr << "validation layer: " << pCallbackData->pMessage << std::endl;
+        std::cout << "validation error: " << pCallbackData->pMessage << '\n';
         return VK_FALSE;
     }
     // Validation layers function pointers
@@ -77,6 +77,7 @@ namespace BlitzenVulkan
             requiredExtensionNames[0] =  VULKAN_SURFACE_KHR_EXTENSION_NAME;
             requiredExtensionNames[1] = "VK_KHR_surface";        
             instanceInfo.enabledExtensionCount = BLITZEN_VULKAN_ENABLED_EXTENSION_COUNT;
+            instanceInfo.enabledLayerCount = 0;
 
             //If this is a debug build, the validation layer extension is also needed
             #ifndef NDEBUG
@@ -122,7 +123,6 @@ namespace BlitzenVulkan
             #endif
 
             instanceInfo.ppEnabledExtensionNames = requiredExtensionNames;
-            instanceInfo.enabledLayerCount = 0;
              
             instanceInfo.pApplicationInfo = &applicationInfo;
 
@@ -271,7 +271,7 @@ namespace BlitzenVulkan
             #if BLITZEN_START_VULKAN_WITH_INDIRECT
                 deviceFeatures.multiDrawIndirect = true;
             #endif
-            deviceInfo.pEnabledFeatures = &deviceFeatures;
+            deviceInfo.pEnabledFeatures = nullptr; // The device features will be added VkDeviceFeatures2
 
             // Extended device features
             VkPhysicalDeviceVulkan11Features vulkan11Features{};
@@ -295,8 +295,14 @@ namespace BlitzenVulkan
             vulkan13Features.dynamicRendering = true;
             vulkan13Features.synchronization2 = true;
 
-            void* pNextChain [3] = {&vulkan11Features, &vulkan12Features, &vulkan13Features};
-            deviceInfo.pNext = *pNextChain;
+            VkPhysicalDeviceFeatures2 vulkanExtendedFeatures{};
+            vulkanExtendedFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+            vulkanExtendedFeatures.features = deviceFeatures;
+
+            deviceInfo.pNext = &vulkanExtendedFeatures;
+            vulkanExtendedFeatures.pNext = &vulkan11Features;
+            vulkan11Features.pNext = &vulkan12Features;
+            vulkan12Features.pNext = &vulkan13Features;
 
             std::vector<VkDeviceQueueCreateInfo> queueInfos(1);
             queueInfos[0].queueFamilyIndex = m_queues.graphicsIndex;
@@ -396,17 +402,17 @@ namespace BlitzenVulkan
         {
             // Retrieve surface format to check for desired swapchain format and color space
             uint32_t surfaceFormatsCount = 0; 
-            vkGetPhysicalDeviceSurfaceFormats2KHR(m_bootstrapObjects.chosenGPU, &surfaceInfo, &surfaceFormatsCount, nullptr);
-            std::vector<VkSurfaceFormat2KHR> surfaceFormats(static_cast<size_t>(surfaceFormatsCount));
-            VK_CHECK(vkGetPhysicalDeviceSurfaceFormats2KHR(m_bootstrapObjects.chosenGPU, 
-            &surfaceInfo, &surfaceFormatsCount, surfaceFormats.data()))
+            vkGetPhysicalDeviceSurfaceFormatsKHR(m_bootstrapObjects.chosenGPU, m_bootstrapObjects.surface, &surfaceFormatsCount, nullptr);
+            std::vector<VkSurfaceFormatKHR> surfaceFormats(static_cast<size_t>(surfaceFormatsCount));
+            VK_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(m_bootstrapObjects.chosenGPU, 
+            m_bootstrapObjects.surface, &surfaceFormatsCount, surfaceFormats.data()))
             // Look for the desired image format
             uint8_t found = 0;
             for(size_t i = 0; i < surfaceFormats.size(); ++i)
             {
                 // If the desire image format is found assign it to the swapchain info and break out of the loop
-                if(surfaceFormats[i].surfaceFormat.format == VK_FORMAT_B8G8R8A8_UNORM && 
-                surfaceFormats[i].surfaceFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+                if(surfaceFormats[i].format == VK_FORMAT_B8G8R8A8_UNORM && 
+                surfaceFormats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
                 {
                     swapchainInfo.imageFormat = VK_FORMAT_B8G8R8A8_UNORM;
                     swapchainInfo.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
@@ -419,10 +425,10 @@ namespace BlitzenVulkan
             // If the desired format is not found (unlikely), assign the first one that is supported and hope for the best ( I'm just a chill guy )
             if(!found)
             {
-                swapchainInfo.imageFormat = surfaceFormats[0].surfaceFormat.format;
+                swapchainInfo.imageFormat = surfaceFormats[0].format;
                 // Save the image format
                 m_bootstrapObjects.swapchainImageFormat = swapchainInfo.imageFormat;
-                swapchainInfo.imageColorSpace = surfaceFormats[0].surfaceFormat.colorSpace;
+                swapchainInfo.imageColorSpace = surfaceFormats[0].colorSpace;
             }
         }
         /* Present mode */
@@ -455,19 +461,18 @@ namespace BlitzenVulkan
         //Set the swapchain extent to the window's width and height
         m_bootstrapObjects.swapchainExtent = {static_cast<uint32_t>(*m_pWindowWidth), static_cast<uint32_t>(*m_pWindowHeight)};
         // Retrieve surface capabilities to properly configure some swapchain values
-        VkSurfaceCapabilities2KHR surfaceCapabilities{};
-        surfaceCapabilities.sType = VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_2_KHR;
-        VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilities2KHR(m_bootstrapObjects.chosenGPU, &surfaceInfo, &surfaceCapabilities));
+        VkSurfaceCapabilitiesKHR surfaceCapabilities{};
+        VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_bootstrapObjects.chosenGPU, m_bootstrapObjects.surface, &surfaceCapabilities));
         /* Swapchain extent */
         {
             // Get the swapchain extent from the surface capabilities, if it is not some weird value
-            if(surfaceCapabilities.surfaceCapabilities.currentExtent.width != UINT32_MAX)
+            if(surfaceCapabilities.currentExtent.width != UINT32_MAX)
             {
-                m_bootstrapObjects.swapchainExtent = surfaceCapabilities.surfaceCapabilities.currentExtent;
+                m_bootstrapObjects.swapchainExtent = surfaceCapabilities.currentExtent;
             }
             // Get the min extent and max extent allowed by the GPU,  to clamp the initial value
-            VkExtent2D minExtent = surfaceCapabilities.surfaceCapabilities.minImageExtent;
-            VkExtent2D maxExtent = surfaceCapabilities.surfaceCapabilities.maxImageExtent;
+            VkExtent2D minExtent = surfaceCapabilities.minImageExtent;
+            VkExtent2D maxExtent = surfaceCapabilities.maxImageExtent;
             m_bootstrapObjects.swapchainExtent.width = std::clamp(m_bootstrapObjects.swapchainExtent.width, maxExtent.width, minExtent.width);
             m_bootstrapObjects.swapchainExtent.height = std::clamp(m_bootstrapObjects.swapchainExtent.height, maxExtent.height, minExtent.height);
             // Swapchain extent fully checked and ready to pass to the swapchain info
@@ -475,16 +480,16 @@ namespace BlitzenVulkan
         }
         /* Min image count */
         {
-            uint32_t imageCount = surfaceCapabilities.surfaceCapabilities.minImageCount + 1;
+            uint32_t imageCount = surfaceCapabilities.minImageCount + 1;
             // Check that image count did not supass max image count
-            if(surfaceCapabilities.surfaceCapabilities.maxImageCount > 0 && surfaceCapabilities.surfaceCapabilities.maxImageCount < imageCount )
+            if(surfaceCapabilities.maxImageCount > 0 && surfaceCapabilities.maxImageCount < imageCount )
             {
-                imageCount = surfaceCapabilities.surfaceCapabilities.maxImageCount;
+                imageCount = surfaceCapabilities.maxImageCount;
             }
             // Swapchain image count fully check and ready to be pass to the swapchain info
             swapchainInfo.minImageCount = imageCount;
         }
-        swapchainInfo.preTransform = surfaceCapabilities.surfaceCapabilities.currentTransform;
+        swapchainInfo.preTransform = surfaceCapabilities.currentTransform;
         if (m_queues.graphicsIndex != m_queues.presentIndex)
         {
             uint32_t queueFamilyIndices[] = {m_queues.graphicsIndex, m_queues.presentIndex};
@@ -516,10 +521,10 @@ namespace BlitzenVulkan
             info.format = m_bootstrapObjects.swapchainImageFormat;
             info.viewType = VK_IMAGE_VIEW_TYPE_2D;
             info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT; // Not sure if this is needed, as a seperate color attachment will be used 
-            info.subresourceRange.baseMipLevel = 1;
-            info.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
-            info.subresourceRange.baseArrayLayer = 1;
-            info.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+            info.subresourceRange.baseMipLevel = 0;
+            info.subresourceRange.levelCount = 1;
+            info.subresourceRange.baseArrayLayer = 0;
+            info.subresourceRange.layerCount = 1;
             VK_CHECK(vkCreateImageView(m_device, &info, m_pCustomAllocator, &(m_bootstrapObjects.swapchainImageViews[i])))
         }
     }

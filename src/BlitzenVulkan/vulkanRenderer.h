@@ -92,7 +92,7 @@ namespace BlitzenVulkan
 
         void UploadDataToGPU();
 
-        void DrawFrame(const BlitzenEngine::Camera& camera);
+        void DrawFrame(RenderContext& context);
 
         void CleanupResources();
 

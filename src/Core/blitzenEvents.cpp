@@ -37,6 +37,7 @@ namespace BlitzenCore
         }
 
         pEventSystemState = &(BlitzenEngine::Engine::GetEngineInstancePointer()->GetEngineSystems().eventSystemState);
+        BlitzenCore::BlitMemoryZero(pEventSystemState, sizeof(EventSystemState));
         return 1;
     }
 
@@ -80,7 +81,6 @@ namespace BlitzenCore
         BlitCL::DynamicArray<RegisteredEvent>& events = pEventSystemState->registeredEvents[static_cast<size_t>(type)];
         if(!events.GetSize())
         {
-            BLIT_INFO("No events of this type exist")
             return 0;
         }
 
@@ -102,7 +102,6 @@ namespace BlitzenCore
         BlitCL::DynamicArray<RegisteredEvent>& events = pEventSystemState->registeredEvents[static_cast<size_t>(type)];
         if(!events.GetSize())
         {
-            BLIT_INFO("No events of this type exist")
             return 0;
         }
 

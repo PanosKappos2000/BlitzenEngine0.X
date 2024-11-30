@@ -9,18 +9,19 @@ namespace BlitzenEngine
         m_pEngine = this;
         BLIT_INFO("%s booting", BLITZEN_VERSION)
 
-        BLIT_ASSERT(BlitzenPlatform::PlatformStartup(&platformState, BLITZEN_VERSION, BLITZEN_WINDOW_STARTING_X, BLITZEN_WINDOW_STARTING_Y, 
-        platformData.windowWidth, platformData.windowHeight))
-
         m_systems.eventSystem = BlitzenCore::EventsInit();
         BLIT_ASSERT_MESSAGE(m_systems.eventSystem, "Event system initalization failed! The Engine cannot start without the event system")
 
         BlitzenCore::InputInit();
         m_systems.inputSystem = 1;
 
+        BLIT_ASSERT(BlitzenPlatform::PlatformStartup(&platformState, BLITZEN_VERSION, BLITZEN_WINDOW_STARTING_X, BLITZEN_WINDOW_STARTING_Y,
+        platformData.windowWidth, platformData.windowHeight))
+
         BlitzenCore::RegisterEvent(BlitzenCore::BlitEventType::EngineShutdown, nullptr, OnEvent);
         BlitzenCore::RegisterEvent(BlitzenCore::BlitEventType::KeyPressed, nullptr, OnKeyPress);
         BlitzenCore::RegisterEvent(BlitzenCore::BlitEventType::KeyReleased, nullptr, OnKeyPress);
+        BlitzenCore::RegisterEvent(BlitzenCore::BlitEventType::WindowResize, nullptr, OnEvent);
 
         //Then initialize vulkan giving it the glfw window width and height
         m_vulkan.Init(&platformState, &(platformData.windowWidth), &(platformData.windowHeight));
@@ -43,14 +44,21 @@ namespace BlitzenEngine
         {
             BlitzenPlatform::PlatformPumpMessages(&platformState);
 
-            m_clock.elapsed = BlitzenPlatform::GetAbsoluteTime() - m_clock.startTime;
-            m_deltaTime = m_clock.elapsed - previousTime;
-            previousTime = m_clock.elapsed;
+            if (!isSuspended)
+            {
+                m_clock.elapsed = BlitzenPlatform::GetAbsoluteTime() - m_clock.startTime;
+                m_deltaTime = m_clock.elapsed - previousTime;
+                previousTime = m_clock.elapsed;
 
-            //Camera is update after events have bee polled
-            m_mainCamera.MoveCamera();
-            //Draw frame after camera has been updated
-            m_vulkan.DrawFrame(m_mainCamera);
+                //Camera is update after events have bee polled
+                m_mainCamera.MoveCamera();
+                //Draw frame after camera has been updated
+                BlitzenVulkan::RenderContext renderContext;
+                renderContext.pCamera = &(m_mainCamera);
+                renderContext.bResize = platformData.resize;
+                m_vulkan.DrawFrame(renderContext);
+                platformData.resize = 0;
+            }
         }
 
         StopClock();
@@ -96,8 +104,30 @@ namespace BlitzenEngine
             BlitzenEngine::Engine::GetEngineInstancePointer()->RequestShutdown();
             return 1; 
         }
+        if(eventType == BlitzenCore::BlitEventType::WindowResize)
+        {
+            uint32_t width = data.data.ui32[0];
+            uint32_t height = data.data.ui32[1];
+            Engine::GetEngineInstancePointer()->UpdateWindowSize(width, height);
+
+            return 1;
+        }
 
         return 0;
+    }
+
+    void Engine::UpdateWindowSize(uint32_t width, uint32_t height)
+    {
+        platformData.windowWidth = width;
+        platformData.windowHeight = height;
+        platformData.resize = 1;
+
+        if (width == 0 || height == 0)
+        {
+            uint8_t isSuspended = 1;
+            return;
+        }
+        uint8_t isSuspended = 0;
     }
 
     uint8_t OnKeyPress(BlitzenCore::BlitEventType eventType, void* pSender, void* pListener, BlitzenCore::EventContext data)
@@ -137,7 +167,6 @@ namespace BlitzenEngine
                 }
                 default:
                 {
-                    BLIT_DBLOG("Key pressed %i", key)
                     return 1;
                 }
             }

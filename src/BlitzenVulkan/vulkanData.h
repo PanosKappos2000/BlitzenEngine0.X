@@ -66,6 +66,17 @@ namespace BlitzenVulkan
         VkDescriptorPool GetDescriptorPool();
     };
 
+    struct RenderContext
+    {
+        bool bResize;
+
+        // The renderer has direct access to the window size through pointer. But I might want to change that later
+        //uint32_t windowWidth;
+        //uint32_t windowHeight;
+
+        void* pCamera;
+    };
+
     struct VulkanStats
     {
         bool drawIndirectMode = true;

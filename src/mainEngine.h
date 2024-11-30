@@ -21,6 +21,7 @@ namespace BlitzenEngine
     {
         uint32_t windowWidth = BLITZEN_WINDOW_WIDTH;
         uint32_t windowHeight = BLITZEN_WINDOW_HEIGHT;
+        uint8_t resize = 0;
     };
 
     struct Clock
@@ -53,6 +54,8 @@ namespace BlitzenEngine
         inline static Engine* GetEngineInstancePointer() {return m_pEngine;}
         inline EngineSystems& GetEngineSystems() {return m_systems;}
 
+        void UpdateWindowSize(uint32_t width, uint32_t height);
+
         inline Camera& GetMainCamera() { return m_mainCamera; }
     
     private:
@@ -80,6 +83,7 @@ namespace BlitzenEngine
         float m_deltaTime = 0;
 
         uint8_t isRunning = 0;
+        uint8_t isSuspended = 0;
     };
 
 
