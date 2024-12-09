@@ -795,7 +795,8 @@ namespace BlitzenVulkan
     {
         //Allocate the descriptor set that will be used for material resource access
         VkDescriptorPoolSize materialDescriptorPoolSize{};
-        materialDescriptorPoolSize.descriptorCount = 2;
+        // This would normally be 2
+        materialDescriptorPoolSize.descriptorCount = 10;
         materialDescriptorPoolSize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER; 
         m_mainMaterialData.descriptorAllocator.Init(&m_device, 1, &materialDescriptorPoolSize);
         m_mainMaterialData.descriptorAllocator.AllocateDescriptorSet(&(m_mainMaterialData.mainMaterialDescriptorSetLayout), 1, 
