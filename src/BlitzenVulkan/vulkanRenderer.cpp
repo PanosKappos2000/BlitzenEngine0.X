@@ -1283,7 +1283,6 @@ namespace BlitzenVulkan
         m_globalSceneData.viewMatrix = pCamera->GetViewMatrix();
         m_globalSceneData.projectionMatrix = pCamera->GetProjectionMatrix();
         //Invert the projection matrix so that it matches glm and objects are not drawn upside down
-        m_globalSceneData.projectionMatrix[1][1] *= -1;
         m_globalSceneData.projectionViewMatrix = m_globalSceneData.projectionMatrix * m_globalSceneData.viewMatrix;
 
 
@@ -1510,9 +1509,9 @@ namespace BlitzenVulkan
         //Since viewport and scissor were specified in the dynamic state, they now need to be set
         VkViewport viewport{};
         viewport.x = 0;
-        viewport.y = 0;
+        viewport.y = static_cast<float>(m_drawExtent.height);
         viewport.width = static_cast<float>(m_drawExtent.width);
-        viewport.height = static_cast<float>(m_drawExtent.height);
+        viewport.height = -static_cast<float>(m_drawExtent.height);
         viewport.minDepth = 0.f;
         viewport.maxDepth = 1.f;
         vkCmdSetViewport(frameCommandBuffer, 0, 1, &viewport);
