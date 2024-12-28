@@ -17,16 +17,23 @@ namespace BlitzenEngine
         inline const glm::mat4& GetProjectionMatrix() const {return m_projectionMatrix;}
 
         void ChangeProjectionMatrix(float fovY, float zNear, float zFar);
+        inline glm::mat4 GetProjectionView() { return m_projectionView; }
 
         //The parameter of these function should only take the values -1, 0 and 1 (I should add some protection against undesirable values)
         inline void SetVelocityX(int8_t x) {m_velocity.x = static_cast<float>(x);}
         inline void SetVelocityY(int8_t y) {m_velocity.y = static_cast<float>(y);}
         inline void SetVelocityZ(int8_t z) {m_velocity.z = static_cast<float>(z);}
+
+        inline float GetZNear() { return m_zNear; }
+        inline float GetZFar() { return m_zFar; }
     
     public:
 
         const uint32_t* m_pWindowWidth;
         const uint32_t* m_pWindowHeight;
+
+        glm::mat4 m_projectionMatrix = glm::mat4(1.f);
+        glm::mat4 m_projectionTranspose;
 
     private:
         
@@ -52,7 +59,7 @@ namespace BlitzenEngine
 
         //Transforms all objects to view coordinates
         glm::mat4 m_viewMatrix = glm::mat4(1.f);
+        glm::mat4 m_projectionView = glm::mat4(1.f);
         //Transforms all objects to clip coordinates
-        glm::mat4 m_projectionMatrix = glm::mat4(1.f);
     };
 }

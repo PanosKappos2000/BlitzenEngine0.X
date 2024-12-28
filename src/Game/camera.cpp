@@ -15,11 +15,11 @@ namespace BlitzenEngine
     {
         if(yawMovement < 100.f && yawMovement > -100.f)
         {
-            m_yaw += (yawMovement * m_sensitivity * deltaTime);
+            m_yaw += (yawMovement * m_sensitivity * deltaTime) / 50.f;
         }
         if(pitchMovement < 100.f && pitchMovement > -100.f)
         {
-            m_pitch -= (pitchMovement * m_sensitivity * deltaTime);
+            m_pitch -= (pitchMovement * m_sensitivity * deltaTime) / 50.f;
         }
 
         glm::quat pitchRotation = glm::angleAxis(m_pitch, glm::vec3(1.0f, 0.f, 0.f));
@@ -33,6 +33,6 @@ namespace BlitzenEngine
         glm::mat4 translationMatrix = glm::translate(glm::mat4(1.f), m_position);
 
         m_viewMatrix = glm::inverse(translationMatrix * m_rotationMatrix);
-        m_projectionMatrix = glm::perspective(glm::radians(m_fovY), static_cast<float>(*m_pWindowWidth) / static_cast<float>(*m_pWindowHeight), m_zNear, m_zFar);
+        m_projectionView = m_projectionMatrix * m_viewMatrix ;
     }
 }

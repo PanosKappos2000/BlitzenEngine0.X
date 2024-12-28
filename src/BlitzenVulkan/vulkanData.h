@@ -19,7 +19,7 @@
 #define BLITZEN_VULKAN_USER_ENGINE                              "Blitzen Engine"
 #define BLITZEN_VULKAN_USER_ENGINE_VERSION                      VK_MAKE_VERSION (1, 0, 0)
 
-#define DESIRED_SWAPCHAIN_PRESENTATION_MODE                     VK_PRESENT_MODE_MAILBOX_KHR
+#define DESIRED_SWAPCHAIN_PRESENTATION_MODE                     VK_PRESENT_MODE_FIFO_KHR
 
 #ifdef NDEBUG
     #define BLITZEN_VULKAN_ENABLED_EXTENSION_COUNT                  2
@@ -69,12 +69,10 @@ namespace BlitzenVulkan
     struct RenderContext
     {
         bool bResize;
-
-        // The renderer has direct access to the window size through pointer. But I might want to change that later
-        //uint32_t windowWidth;
-        //uint32_t windowHeight;
+        bool bDrawIndirect = true;
 
         void* pCamera;
+        glm::mat4 viewMatrix;// This is given separately so that the frustum can be frozen
     };
 
     struct VulkanStats
@@ -179,8 +177,8 @@ namespace BlitzenVulkan
 
         MaterialInstance* pMaterial;
 
-        OrientedBoundingBox obb;
-        BoundingSphere sphereCollision;
+        glm::vec3 center;
+        float radius;
     };
 
     struct MeshAsset
@@ -259,19 +257,12 @@ namespace BlitzenVulkan
         //This specifies the model matrix with which
         glm::mat4 modelMatrix;
 
-        //Saves the oriented bounding box of the surface to do frustum culling
-        OrientedBoundingBox obb;
-
         //If frustum culling is done using a boudning sphere, this is used
-        BoundingSphere sphereCollision;
+        glm::vec3 center;
+        float radius;
 
         //Once frustum culling is complete every render object will have this set to false or true which will dictate if they get rendered or not
         bool bVisible = true;
-
-        //When being added to the draw context each object has its worldTransorm decomposed to get the scale, position and rotation of the object
-        glm::vec3 position;
-        float scale;
-        glm::quat orientation;
     };
 
     //Holds the commands for a specific draw call with multi draw indirect and also some per draw data
@@ -285,15 +276,14 @@ namespace BlitzenVulkan
         VkDrawIndexedIndirectCommand indirectDraws;
     };
 
-    struct alignas(16) FrustumCollisionData
+    struct alignas(16) IndirectRenderObject
     {
-        #if BLITZEN_FRUSTUM_CULLING_BOUNDING_SPHERE
-            glm::vec3 center;
-            float radius;
-        #else
-            glm::vec3 origin;
-            glm::vec3 extents;
-        #endif
+        glm::mat4 worldMatrix;
+
+        glm::vec3 center;
+        float radius;
+
+        uint32_t materialIndex;
     };
 
     struct DrawContext
@@ -303,7 +293,7 @@ namespace BlitzenVulkan
         //If Blitzen uses indirect commands, the draw context will include an array of draw indirect data
         #if BLITZEN_START_VULKAN_WITH_INDIRECT
             std::vector<DrawIndirectData> indirectDrawData;
-            std::vector<FrustumCollisionData> surfaceFrustumCollisions;
+            std::vector<IndirectRenderObject> renderObjects;
         #endif
     };
 

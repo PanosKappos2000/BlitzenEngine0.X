@@ -20,8 +20,7 @@ void main()
     
     //Pass the color to the shader as the color factor of the material multiplied by the color of the vertex
     outColor = sceneData.materialConstantsBuffer.materialConstants[sceneData.indirectDataBuffer.indirectDraws[gl_DrawIDARB].materialIndex].
-    colorFactor.xyz * currentVertex.color.xyz;
- 
+    colorFactor.xyz * currentVertex.color.xyz; 
     outUvMap = vec2(currentVertex.uvMapX, currentVertex.uvMapY);
     outMaterialIndex = sceneData.indirectDataBuffer.indirectDraws[gl_DrawIDARB].materialIndex;
 }

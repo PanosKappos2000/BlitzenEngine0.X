@@ -42,6 +42,14 @@ namespace BlitzenEngine
         m_deltaTime = m_clock.elapsed - previousTime;
 
         m_mainCamera.Init(m_deltaTime, &(platformData.windowWidth), &(platformData.windowHeight));
+        // The projection and its tranpose are set here to avoid constantly rebuilding them
+        m_mainCamera.m_projectionMatrix =
+        glm::perspective(glm::radians(70.f), static_cast<float>(platformData.windowWidth) /
+        static_cast<float>(platformData.windowHeight), m_mainCamera.GetZNear(), m_mainCamera.GetZFar());
+        m_mainCamera.m_projectionTranspose = glm::transpose(m_mainCamera.m_projectionMatrix);
+
+        // This is declared here so that it is possible to freeze the view frustum
+        BlitzenVulkan::RenderContext renderContext;
 
         //Loops until an event occurs that causes the engine to terminate
         while(isRunning)
@@ -56,10 +64,13 @@ namespace BlitzenEngine
 
                 //Camera is update after events have bee polled
                 m_mainCamera.MoveCamera(static_cast<float>(m_deltaTime));
+
                 //Draw frame after camera has been updated
-                BlitzenVulkan::RenderContext renderContext;
                 renderContext.pCamera = &(m_mainCamera);
                 renderContext.bResize = platformData.resize;
+                renderContext.bDrawIndirect = m_bVulkanDrawIndirect;
+                if (!m_bFreezeFrustum)
+                    renderContext.viewMatrix = m_mainCamera.GetViewMatrix();
                 m_vulkan.DrawFrame(renderContext);
                 platformData.resize = 0;
             }
@@ -132,6 +143,11 @@ namespace BlitzenEngine
             return;
         }
         uint8_t isSuspended = 0;
+
+        m_mainCamera.m_projectionMatrix = 
+        glm::perspective(glm::radians(70.f), static_cast<float>(platformData.windowWidth) / 
+        static_cast<float>(platformData.windowHeight), m_mainCamera.GetZNear(), m_mainCamera.GetZFar());
+        m_mainCamera.m_projectionTranspose = glm::transpose(m_mainCamera.m_projectionMatrix);
     }
 
     uint8_t OnKeyPress(BlitzenCore::BlitEventType eventType, void* pSender, void* pListener, BlitzenCore::EventContext data)
@@ -169,9 +185,14 @@ namespace BlitzenEngine
                     Engine::GetEngineInstancePointer()->GetMainCamera().SetVelocityX(1);
                     break;
                 }
+                case BlitzenCore::BlitKey::__F1:
+                {
+                    Engine::GetEngineInstancePointer()->FreezeFrustum();
+                    break;
+                }
                 case BlitzenCore::BlitKey::__F4:
                 {
-                    // TODO: Add variable logic to change from indirect to regular pipeline
+                    Engine::GetEngineInstancePointer()->ChangeVulkanDrawMode();
                     break;
                 }
                 default:

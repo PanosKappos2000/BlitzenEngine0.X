@@ -58,6 +58,9 @@ namespace BlitzenEngine
 
         inline Camera& GetMainCamera() { return m_mainCamera; }
         inline double GetDeltaTime() { return m_deltaTime; }
+
+        inline void ChangeVulkanDrawMode() { m_bVulkanDrawIndirect = !m_bVulkanDrawIndirect; }
+        inline void FreezeFrustum() { m_bFreezeFrustum = !m_bFreezeFrustum; }
     
     private:
 
@@ -78,6 +81,8 @@ namespace BlitzenEngine
         Camera m_mainCamera;
 
         Controller m_mainController;
+        bool m_bVulkanDrawIndirect = true;
+        bool m_bFreezeFrustum = false;
 
         Clock m_clock;
 

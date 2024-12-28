@@ -33,7 +33,7 @@ namespace BlitzenVulkan
             //If vulkan is going to need draw indirect during runtime, for each surface in the mesh there needs to be a draw indirect command
             #if BLITZEN_START_VULKAN_WITH_INDIRECT
                 drawContext.indirectDrawData.resize(drawContext.opaqueRenderObjects.size());
-                drawContext.surfaceFrustumCollisions.resize(drawContext.opaqueRenderObjects.size());
+                drawContext.renderObjects.resize(drawContext.opaqueRenderObjects.size());
             #endif
             for(size_t i = startIndex; i < drawContext.opaqueRenderObjects.size(); ++i)
             {
@@ -46,14 +46,8 @@ namespace BlitzenVulkan
                 newObject.pMaterial = currentSurface.pMaterial;
                 //The object will also need the mesh's/node's final matrix
                 newObject.modelMatrix = finalMatrix;
-                newObject.obb.extents = currentSurface.obb.extents;
-                newObject.obb.origin = currentSurface.obb.origin;
-                newObject.sphereCollision.center = currentSurface.sphereCollision.center;
-                newObject.sphereCollision.radius = currentSurface.sphereCollision.radius;
-
-                newObject.position = translation;
-                newObject.scale = std::max(scale[0], std::max(scale[1], scale[2]));
-                newObject.orientation = glm::quat(rotation);
+                newObject.center = currentSurface.center;
+                newObject.radius = currentSurface.radius;
 
                 //Setting up for draw indirect if it needs to be available
                 #if BLITZEN_START_VULKAN_WITH_INDIRECT
@@ -68,8 +62,8 @@ namespace BlitzenVulkan
                     drawContext.indirectDrawData[i].worldMatrix = finalMatrix;
                     drawContext.indirectDrawData[i].materialIndex = currentSurface.pMaterial->materialIndex;
                     //Giving the bounding object to the surface frustum collision so that it can be passed to a draw indirect buffer
-                    drawContext.surfaceFrustumCollisions[i].origin = currentSurface.obb.origin;
-                    drawContext.surfaceFrustumCollisions[i].extents = currentSurface.obb.extents;
+                    drawContext.renderObjects[i].center = currentSurface.center;
+                    drawContext.renderObjects[i].radius = currentSurface.radius;
                 #endif
             }
         }

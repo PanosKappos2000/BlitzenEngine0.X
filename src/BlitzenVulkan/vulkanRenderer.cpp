@@ -653,7 +653,7 @@ namespace BlitzenVulkan
             m_globalSceneData.indirectBufferAddress = vkGetBufferDeviceAddress(m_device, &indirectBufferAddressInfo);
 
             //Allocate the buffer that will hold the data used for frustum culling
-            VkDeviceSize frustumCullingDataBufferSize = sizeof(FrustumCollisionData) * m_mainDrawContext.surfaceFrustumCollisions.size();
+            VkDeviceSize frustumCullingDataBufferSize = sizeof(IndirectRenderObject) * m_mainDrawContext.renderObjects.size();
             AllocateBuffer(m_surfaceFrustumCollisionBuffer, frustumCullingDataBufferSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | 
             VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
             //Store the device address of the frustum culling buffer, so that it can be passed to the shaders every frame
@@ -683,7 +683,7 @@ namespace BlitzenVulkan
             memcpy(reinterpret_cast<char*>(allBuffersData) + static_cast<size_t>(vertexBufferSize + indexBufferSize + materialBufferSize), 
             drawIndirectCommands.data(), static_cast<size_t>(indirectBufferSize));
             memcpy(reinterpret_cast<char*>(allBuffersData) + static_cast<size_t>(vertexBufferSize + indexBufferSize + materialBufferSize + 
-            indirectBufferSize), m_mainDrawContext.surfaceFrustumCollisions.data(), static_cast<size_t>(frustumCullingDataBufferSize));
+            indirectBufferSize), m_mainDrawContext.renderObjects.data(), static_cast<size_t>(frustumCullingDataBufferSize));
         #endif
 
         //Start recording commands for copying the staging buffer into the GPU buffers
@@ -1058,6 +1058,8 @@ namespace BlitzenVulkan
                 size_t previousVerticesSize = vertices.size();
                 vertices.resize(vertices.size() + posAccessor.count);
 
+                glm::vec3 center(0);
+                float radius = 0.f;
                 fastgltf::iterateAccessorWithIndex<glm::vec3>(gltf, posAccessor, [&](glm::vec3 v, size_t index) {
                     Vertex& newVertex = vertices[initialVertex + index];
                     newVertex.position = v;
@@ -1065,23 +1067,22 @@ namespace BlitzenVulkan
                     newVertex.color = glm::vec4{ 1.f };
                     newVertex.uvMapX = 0;
                     newVertex.uvMapY = 0;
+
+                    center += newVertex.position;
                 });
 
-                //Derive the oriented bounding box of the surface
-                glm::vec3 minPos = vertices[initialVertex].position; 
-                glm::vec3 maxPos = vertices[initialVertex].position;
-                for(size_t i = initialVertex; i < vertices.size(); ++i)
-                {
-                    minPos = glm::min(minPos, vertices[initialVertex].position);
-                    maxPos = glm::max(maxPos, vertices[initialVertex].position);
-                }
-                currentSurface.obb.origin = (minPos + maxPos) * 0.5f;
-                currentSurface.obb.extents = (maxPos - minPos) * 0.5f;
-                //Using the oriented bounding box the bounding sphere can also be derived
-                currentSurface.sphereCollision.center.x = glm::distance(maxPos.x, minPos.x) /** 0.5f*/;
-                currentSurface.sphereCollision.center.y = glm::distance(maxPos.y, minPos.y) /** 0.5f*/;
-                currentSurface.sphereCollision.center.z = glm::distance(maxPos.z, minPos.z) /** 0.5f*/;
-                float radius = glm::length(currentSurface.obb.extents);
+                center /= static_cast<float>(posAccessor.count);
+
+                fastgltf::iterateAccessorWithIndex<glm::vec3>(gltf, posAccessor, [&](glm::vec3 v, size_t index) {
+                    Vertex& newVertex = vertices[initialVertex + index];
+                    radius = std::max(radius, glm::distance(center, newVertex.position));
+                });
+
+                currentSurface.center = center;
+                currentSurface.radius = radius;
+                
+
+                
 
                 /* Load normals */
                 auto normals = primitive.findAttribute("NORMAL");
@@ -1280,10 +1281,10 @@ namespace BlitzenVulkan
         Setting up the global scene data
         ---------------------------------*/
         //Setup the projection and view matrix
-        m_globalSceneData.viewMatrix = pCamera->GetViewMatrix();
+        m_globalSceneData.viewMatrix = context.viewMatrix;
         m_globalSceneData.projectionMatrix = pCamera->GetProjectionMatrix();
         //Invert the projection matrix so that it matches glm and objects are not drawn upside down
-        m_globalSceneData.projectionViewMatrix = m_globalSceneData.projectionMatrix * m_globalSceneData.viewMatrix;
+        m_globalSceneData.projectionViewMatrix = pCamera->GetProjectionView();
 
 
         //Default lighting parameters
@@ -1301,22 +1302,23 @@ namespace BlitzenVulkan
         Initializing frustum culling data
         */
         glm::vec4 frustumData[6];
-        frustumData[0] = m_globalSceneData.viewMatrix[3] + m_globalSceneData.viewMatrix[0];
-        frustumData[1] = m_globalSceneData.viewMatrix[3] - m_globalSceneData.viewMatrix[0];
-        frustumData[2] = m_globalSceneData.viewMatrix[3] + m_globalSceneData.viewMatrix[1];
-        frustumData[3] = m_globalSceneData.viewMatrix[3] - m_globalSceneData.viewMatrix[1];
-        frustumData[4] = m_globalSceneData.viewMatrix[3] - m_globalSceneData.viewMatrix[2];
+        frustumData[0] = pCamera->m_projectionTranspose[3] + pCamera->m_projectionTranspose[0];
+        frustumData[1] = pCamera->m_projectionTranspose[3] - pCamera->m_projectionTranspose[0];
+        frustumData[2] = pCamera->m_projectionTranspose[3] + pCamera->m_projectionTranspose[1];
+        frustumData[3] = pCamera->m_projectionTranspose[3] - pCamera->m_projectionTranspose[1];
+        frustumData[4] = pCamera->m_projectionTranspose[3] - pCamera->m_projectionTranspose[2];
         frustumData[5] = glm::vec4(0, 0, -1, 10000.f);
         //If indirect mode is not active frustum culling is done on the cpu
-        if(!stats.drawIndirectMode)
+        if(!context.bDrawIndirect)
         {
             for(RenderObject& object : m_mainDrawContext.opaqueRenderObjects)
             {
                 bool visible = true;
                 for(size_t i = 0; i < 6; ++i)
                 {
-                    glm::vec3 center = object.modelMatrix * glm::vec4((object.sphereCollision.center), 1.f); 
-                    float radius = object.sphereCollision.radius * object.scale;
+                    glm::vec3 center = object.modelMatrix * glm::vec4((object.center), 1.f);
+                    center = m_globalSceneData.viewMatrix * glm::vec4(center, 1.f);
+                    float radius = object.radius;
                     visible = visible && (glm::dot(frustumData[i], glm::vec4(center, 1)) > -radius);
                 }
                 object.bVisible = visible;
@@ -1426,7 +1428,7 @@ namespace BlitzenVulkan
 
         #if BLITZEN_START_VULKAN_WITH_INDIRECT
             vkCmdBindPipeline(frameCommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_indirectCullingComputePipelineData.pipeline);
-            vkCmdDispatch(frameCommandBuffer, (static_cast<uint32_t>(m_mainDrawContext.indirectDrawData.size()) + 31) / 32, 1, 1);
+            //vkCmdDispatch(frameCommandBuffer, (static_cast<uint32_t>(m_mainDrawContext.indirectDrawData.size()) + 31) / 32, 1, 1);
         #endif
 
 
@@ -1482,7 +1484,7 @@ namespace BlitzenVulkan
         0, VK_INDEX_TYPE_UINT32);
         #if BLITZEN_START_VULKAN_WITH_INDIRECT
             //Bind the pipeline and the global descriptor set for the indirect pipeline if it is active
-            if(stats.drawIndirectMode)
+            if(context.bDrawIndirect)
             {
                 vkCmdBindPipeline(frameCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, 
                 m_mainMaterialData.indirectDrawOpaqueGraphicsPipeline);
@@ -1527,7 +1529,7 @@ namespace BlitzenVulkan
             vkCmdWriteTimestamp2(frameCommandBuffer, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, currentTimestampQueryPool, 0);
         //#endif 
         #if BLITZEN_START_VULKAN_WITH_INDIRECT
-            if(stats.drawIndirectMode)
+            if(context.bDrawIndirect)
             {
                 //This is just beatiful
                 vkCmdDrawIndexedIndirect(frameCommandBuffer, m_drawIndirectDataBuffer.buffer, offsetof(DrawIndirectData, indirectDraws), 

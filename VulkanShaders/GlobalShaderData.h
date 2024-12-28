@@ -38,15 +38,19 @@ layout(buffer_reference, std430) readonly buffer MaterialConstantsBuffer
     MaterialConstants materialConstants[];
 };
 
-struct FrustumCollisionData
+struct RenderObject 
 {
+    mat4 modelMatrix;
+
     vec3 center;
     float radius;
+
+    uint ObjectId;
 };
 
 layout(buffer_reference, std430) readonly buffer FrustumCollisionDataBuffer
 {
-    FrustumCollisionData frustumCollisions[];
+    RenderObject object[];
 };
 
 layout(set = 0, binding = 0) uniform SceneData
