@@ -36,7 +36,7 @@ namespace BlitzenPlatform
     void ConsoleError(const char* message, uint8_t color);
 
     // This is basically like glfwGetTime()
-    float GetAbsoluteTime();
+    double GetAbsoluteTime();
 
     void PSleep(uint64_t ms);
 

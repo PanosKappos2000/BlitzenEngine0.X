@@ -17,8 +17,8 @@ namespace BlitzenPlatform
             HINSTANCE windowsInstance;
         };
 
-        static float clockFrequency;
-        static LARGE_INTEGER startTime;
+        inline double clockFrequency;
+        inline LARGE_INTEGER startTime;
 
         // Will be given as a function pointer to be called by window when an event occurs
         LRESULT CALLBACK Win32ProcessMessage(HWND winWindow, uint32_t msg, WPARAM w_param, LPARAM l_param);
@@ -101,8 +101,8 @@ namespace BlitzenPlatform
 
             // Clock setup, similar thing to glfwGetTime
             LARGE_INTEGER frequency;
-            QueryPerformanceCounter(&frequency);
-            clockFrequency = 1.0 / static_cast<float>(frequency.QuadPart);// The quad part is just a 64 bit integer
+            QueryPerformanceFrequency(&frequency);
+            clockFrequency = 1.0 / static_cast<double>(frequency.QuadPart);// The quad part is just a 64 bit integer
             QueryPerformanceCounter(&startTime);
 
             // Tell the engine that the function was successful
@@ -118,11 +118,11 @@ namespace BlitzenPlatform
             }
         }
 
-        float GetAbsoluteTime()
+        double GetAbsoluteTime()
         {
             LARGE_INTEGER nowTime;
             QueryPerformanceCounter(&nowTime);
-            return static_cast<float>(nowTime.QuadPart) * clockFrequency;
+            return static_cast<double>(nowTime.QuadPart) * clockFrequency;
         }
 
         void PSleep(uint64_t ms)

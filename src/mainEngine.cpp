@@ -25,7 +25,6 @@ namespace BlitzenEngine
 
         //Then initialize vulkan giving it the glfw window width and height
         m_vulkan.Init(&platformState, &(platformData.windowWidth), &(platformData.windowHeight));
-        m_mainCamera.Init(&m_deltaTime, &(platformData.windowWidth), &(platformData.windowHeight));
 
         isRunning = 1;
     }
@@ -37,7 +36,11 @@ namespace BlitzenEngine
         m_vulkan.UploadDataToGPU();
 
         StartClock();
-        float previousTime = m_clock.elapsed;
+        double previousTime = m_clock.elapsed;
+        m_clock.elapsed = BlitzenPlatform::GetAbsoluteTime() - m_clock.startTime;
+        m_deltaTime = m_clock.elapsed - previousTime;
+
+        m_mainCamera.Init(m_deltaTime, &(platformData.windowWidth), &(platformData.windowHeight));
 
         //Loops until an event occurs that causes the engine to terminate
         while(isRunning)
@@ -46,12 +49,12 @@ namespace BlitzenEngine
 
             if (!isSuspended)
             {
+                previousTime = m_clock.elapsed;
                 m_clock.elapsed = BlitzenPlatform::GetAbsoluteTime() - m_clock.startTime;
                 m_deltaTime = m_clock.elapsed - previousTime;
-                previousTime = m_clock.elapsed;
 
                 //Camera is update after events have bee polled
-                m_mainCamera.MoveCamera();
+                m_mainCamera.MoveCamera(static_cast<float>(m_deltaTime));
                 //Draw frame after camera has been updated
                 BlitzenVulkan::RenderContext renderContext;
                 renderContext.pCamera = &(m_mainCamera);
@@ -163,6 +166,11 @@ namespace BlitzenEngine
                 case BlitzenCore::BlitKey::__D:
                 {
                     Engine::GetEngineInstancePointer()->GetMainCamera().SetVelocityX(1);
+                    break;
+                }
+                case BlitzenCore::BlitKey::__F4:
+                {
+                    // TODO: Add variable logic to change from indirect to regular pipeline
                     break;
                 }
                 default:

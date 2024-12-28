@@ -2,26 +2,24 @@
 
 namespace BlitzenEngine
 {
-    void Camera::Init(float* pDeltaTime, const uint32_t* pWindowWidth, const uint32_t* pWindowHeight)
+    void Camera::Init(float deltaTime, const uint32_t* pWindowWidth, const uint32_t* pWindowHeight)
     {
-        //Storing the delta time, as it will be constantly used in camera functions, I'll probably do this differently in the future
-        m_pDeltaTime = pDeltaTime;
         m_pWindowWidth = pWindowWidth;
         m_pWindowHeight = pWindowHeight;
 
-        RotateCamera(0.f, 0.f);
-        MoveCamera();
+        RotateCamera(0.f, 0.f, deltaTime);
+        MoveCamera(deltaTime);
     }
 
-    void Camera::RotateCamera(float yawMovement, float pitchMovement)
+    void Camera::RotateCamera(float yawMovement, float pitchMovement, float deltaTime)
     {
         if(yawMovement < 100.f && yawMovement > -100.f)
         {
-            m_yaw += (yawMovement * m_sensitivity * (*m_pDeltaTime)) / 100.f;
+            m_yaw += (yawMovement * m_sensitivity * deltaTime) / 100.f;
         }
         if(pitchMovement < 100.f && pitchMovement > -100.f)
         {
-            m_pitch -= (pitchMovement * m_sensitivity * (*m_pDeltaTime)) / 100.f;
+            m_pitch -= (pitchMovement * m_sensitivity * deltaTime) / 100.f;
         }
 
         glm::quat pitchRotation = glm::angleAxis(m_pitch, glm::vec3(1.0f, 0.f, 0.f));
@@ -29,9 +27,9 @@ namespace BlitzenEngine
         m_rotationMatrix = glm::toMat4(yawRotation) * glm::toMat4(pitchRotation);
     }
 
-    void Camera::MoveCamera()
+    void Camera::MoveCamera(float deltaTime)
     {
-        m_position += glm::vec3(m_rotationMatrix * glm::vec4(m_velocity /** (*m_pDeltaTime) * m_speed*/ *0.1f, 0.f));
+        m_position += glm::vec3(m_rotationMatrix * glm::vec4(m_velocity * m_speed * deltaTime, 0.f));
         glm::mat4 translationMatrix = glm::translate(glm::mat4(1.f), m_position);
 
         m_viewMatrix = glm::inverse(translationMatrix * m_rotationMatrix);

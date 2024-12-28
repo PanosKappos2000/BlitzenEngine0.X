@@ -26,8 +26,8 @@ namespace BlitzenEngine
 
     struct Clock
     {
-        float startTime;
-        float elapsed;
+        double startTime;
+        double elapsed;
     };
 
     struct EngineSystems
@@ -80,7 +80,7 @@ namespace BlitzenEngine
 
         Clock m_clock;
 
-        float m_deltaTime = 0;
+        double m_deltaTime = 0;
 
         uint8_t isRunning = 0;
         uint8_t isSuspended = 0;

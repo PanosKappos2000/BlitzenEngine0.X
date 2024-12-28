@@ -7,11 +7,11 @@ namespace BlitzenEngine
     class Camera
     {
     public:
-        void Init(float* pDeltaTime, const uint32_t* windowWidth, const uint32_t* windowHeight);
+        void Init(float deltaTime, const uint32_t* windowWidth, const uint32_t* windowHeight);
 
-        void MoveCamera();
+        void MoveCamera(float deltaTime);
 
-        void RotateCamera(float yawMovement, float pitchMovement);
+        void RotateCamera(float yawMovement, float pitchMovement, float deltaTime);
 
         inline const glm::mat4& GetViewMatrix() const {return m_viewMatrix;}
         inline const glm::mat4& GetProjectionMatrix() const {return m_projectionMatrix;}
@@ -33,9 +33,6 @@ namespace BlitzenEngine
         //Dictates how much the camera should move each frame(if at all)
         glm::vec3 m_velocity = {0.f, 0.f, 0.f};
 
-        //Keeps track of the delta time of the engine so that movement is the same speed no matter the fps
-        float* m_pDeltaTime = nullptr;
-
         //Used to set the translation of the view matrix
         glm::vec3 m_position = glm::vec3(0.f, 0.f, -5.f);
 
@@ -46,7 +43,7 @@ namespace BlitzenEngine
 
         //Data for how fast the camera should move and change direction
         float m_sensitivity = 10.f;
-        float m_speed = 35.f;
+        float m_speed = 100.f;
 
         //Used to set up the projection matrix with glm::perspective
         float m_fovY = 45.0f;
