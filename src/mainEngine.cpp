@@ -22,6 +22,7 @@ namespace BlitzenEngine
         BlitzenCore::RegisterEvent(BlitzenCore::BlitEventType::KeyPressed, nullptr, OnKeyPress);
         BlitzenCore::RegisterEvent(BlitzenCore::BlitEventType::KeyReleased, nullptr, OnKeyPress);
         BlitzenCore::RegisterEvent(BlitzenCore::BlitEventType::WindowResize, nullptr, OnEvent);
+        BlitzenCore::RegisterEvent(BlitzenCore::BlitEventType::MouseMoved, this, OnMouseMove);
 
         //Then initialize vulkan giving it the glfw window width and height
         m_vulkan.Init(&platformState, &(platformData.windowWidth), &(platformData.windowHeight));
@@ -198,6 +199,18 @@ namespace BlitzenEngine
             }
         }
         return 0;
+    }
+
+    uint8_t OnMouseMove(BlitzenCore::BlitEventType eventType, void* pSender, void* pListener, BlitzenCore::EventContext data)
+    {
+        Engine* pBlitzen = reinterpret_cast<Engine*>(pListener);
+
+        Camera& blitCamera = pBlitzen->GetMainCamera();
+
+        float pitchMovement = static_cast<float>(data.data.si16[1]);
+        float yawMovement = static_cast<float>(data.data.si16[0]);
+        blitCamera.RotateCamera(yawMovement, pitchMovement, static_cast<float>(pBlitzen->GetDeltaTime()));
+        return 1;
     }
 
 }

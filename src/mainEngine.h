@@ -57,6 +57,7 @@ namespace BlitzenEngine
         void UpdateWindowSize(uint32_t width, uint32_t height);
 
         inline Camera& GetMainCamera() { return m_mainCamera; }
+        inline double GetDeltaTime() { return m_deltaTime; }
     
     private:
 
@@ -90,4 +91,6 @@ namespace BlitzenEngine
     uint8_t OnEvent(BlitzenCore::BlitEventType eventType, void* pSender, void* pListener, BlitzenCore::EventContext data);
 
     uint8_t OnKeyPress(BlitzenCore::BlitEventType eventType, void* pSender, void* pListener, BlitzenCore::EventContext data);
+
+    uint8_t OnMouseMove(BlitzenCore::BlitEventType eventType, void* pSender, void* pListener, BlitzenCore::EventContext data);
 }

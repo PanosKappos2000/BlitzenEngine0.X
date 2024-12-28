@@ -15,11 +15,11 @@ namespace BlitzenEngine
     {
         if(yawMovement < 100.f && yawMovement > -100.f)
         {
-            m_yaw += (yawMovement * m_sensitivity * deltaTime) / 100.f;
+            m_yaw += (yawMovement * m_sensitivity * deltaTime);
         }
         if(pitchMovement < 100.f && pitchMovement > -100.f)
         {
-            m_pitch -= (pitchMovement * m_sensitivity * deltaTime) / 100.f;
+            m_pitch -= (pitchMovement * m_sensitivity * deltaTime);
         }
 
         glm::quat pitchRotation = glm::angleAxis(m_pitch, glm::vec3(1.0f, 0.f, 0.f));
