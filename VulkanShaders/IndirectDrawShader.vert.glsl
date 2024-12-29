@@ -14,14 +14,17 @@ layout(location = 2) out flat uint outMaterialIndex;
 void main()
 {
     Vertex currentVertex = sceneData.vertexBuffer.vertices[gl_VertexIndex];
+    uint drawIndex = sceneData.indirectDataBuffer.draws[gl_DrawIDARB].objectId;
+    RenderObject currentRender = sceneData.renderObjectBuffer.objects[gl_DrawIDARB];
 
     //Write the position of the vertex that is being processed to gl_Position
-    gl_Position = sceneData.projectionViewMatrix * sceneData.indirectDataBuffer.indirectDraws[gl_DrawIDARB].worldMatrix * vec4(currentVertex.position, 1.0f);
+    gl_Position = sceneData.projectionViewMatrix * currentRender.modelMatrix * vec4(currentVertex.position, 1.0f);
     
     //Pass the color to the shader as the color factor of the material multiplied by the color of the vertex
-    outColor = sceneData.materialConstantsBuffer.materialConstants[sceneData.indirectDataBuffer.indirectDraws[gl_DrawIDARB].materialIndex].
+    outColor = sceneData.materialConstantsBuffer.materialConstants[currentRender.materialIndex].
     colorFactor.xyz * currentVertex.color.xyz;
  
     outUvMap = vec2(currentVertex.uvMapX, currentVertex.uvMapY);
-    outMaterialIndex = sceneData.indirectDataBuffer.indirectDraws[gl_DrawIDARB].materialIndex;
+    
+    outMaterialIndex = currentRender.materialIndex;
 }

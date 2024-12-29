@@ -227,6 +227,7 @@ namespace BlitzenVulkan
         MeshBuffers m_globalIndexAndVertexBuffer;
         //Holds all the vkDrawIndexedIndirectCommand that will be used for the vkCmdDrawIndexedIndirect call
         AllocatedBuffer m_drawIndirectDataBuffer;
+        AllocatedBuffer m_finalIndirectBuffer;
         //Holds all the material constants (color factor, metal rough factor etc) that will be used in the scene
         AllocatedBuffer m_globalMaterialConstantsBuffer;
         AllocatedBuffer m_surfaceFrustumCollisionBuffer;

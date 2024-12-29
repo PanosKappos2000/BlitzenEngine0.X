@@ -32,7 +32,7 @@ namespace BlitzenVulkan
             drawContext.opaqueRenderObjects.resize(drawContext.opaqueRenderObjects.size() + pMesh->surfaces.size());
             //If vulkan is going to need draw indirect during runtime, for each surface in the mesh there needs to be a draw indirect command
             #if BLITZEN_START_VULKAN_WITH_INDIRECT
-                drawContext.indirectDrawData.resize(drawContext.opaqueRenderObjects.size());
+                drawContext.indirectData.resize(drawContext.opaqueRenderObjects.size());
                 drawContext.renderObjects.resize(drawContext.opaqueRenderObjects.size());
             #endif
             for(size_t i = startIndex; i < drawContext.opaqueRenderObjects.size(); ++i)
@@ -51,16 +51,17 @@ namespace BlitzenVulkan
 
                 //Setting up for draw indirect if it needs to be available
                 #if BLITZEN_START_VULKAN_WITH_INDIRECT
-                    VkDrawIndexedIndirectCommand& currentDraw = drawContext.indirectDrawData[i].indirectDraws;
-                    currentDraw.firstIndex = currentSurface.firstIndex;
-                    currentDraw.instanceCount = 1;
-                    currentDraw.indexCount = currentSurface.indexCount;
-                    currentDraw.firstInstance = 0;
-                    currentDraw.vertexOffset = 0;
+                    DrawIndirectData& currentDraw = drawContext.indirectData[i];
+                    currentDraw.indirectDraws.firstIndex = currentSurface.firstIndex;
+                    currentDraw.indirectDraws.instanceCount = 1;
+                    currentDraw.indirectDraws.indexCount = currentSurface.indexCount;
+                    currentDraw.indirectDraws.firstInstance = 0;
+                    currentDraw.indirectDraws.vertexOffset = 0;
+                    currentDraw.objectId = i;
 
                     //Update object data so that it can be drawn properly from with the shader
-                    drawContext.indirectDrawData[i].worldMatrix = finalMatrix;
-                    drawContext.indirectDrawData[i].materialIndex = currentSurface.pMaterial->materialIndex;
+                    drawContext.renderObjects[i].worldMatrix = finalMatrix;
+                    drawContext.renderObjects[i].materialIndex = currentSurface.pMaterial->materialIndex;
                     //Giving the bounding object to the surface frustum collision so that it can be passed to a draw indirect buffer
                     drawContext.renderObjects[i].center = currentSurface.center;
                     drawContext.renderObjects[i].radius = currentSurface.radius;

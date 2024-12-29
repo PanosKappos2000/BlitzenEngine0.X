@@ -510,23 +510,6 @@ namespace BlitzenVulkan
         m_bootstrapObjects.swapchainImages.resize(swapchainImageCount);
         VK_CHECK(vkGetSwapchainImagesKHR(m_device, m_bootstrapObjects.swapchain, &swapchainImageCount, m_bootstrapObjects.swapchainImages.data()))
         // Create image view for each swapchain image
-        m_bootstrapObjects.swapchainImageViews.resize(static_cast<size_t>(swapchainImageCount));
-        for(size_t i = 0; i < m_bootstrapObjects.swapchainImageViews.size(); ++i)
-        {
-            VkImageViewCreateInfo info{};
-            info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-            info.pNext = nullptr;
-            info.flags = 0;
-            info.image = m_bootstrapObjects.swapchainImages[i];
-            info.format = m_bootstrapObjects.swapchainImageFormat;
-            info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-            info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT; // Not sure if this is needed, as a seperate color attachment will be used 
-            info.subresourceRange.baseMipLevel = 0;
-            info.subresourceRange.levelCount = 1;
-            info.subresourceRange.baseArrayLayer = 0;
-            info.subresourceRange.layerCount = 1;
-            VK_CHECK(vkCreateImageView(m_device, &info, m_pCustomAllocator, &(m_bootstrapObjects.swapchainImageViews[i])))
-        }
     }
 
 
@@ -544,6 +527,7 @@ namespace BlitzenVulkan
 
         #if BLITZEN_START_VULKAN_WITH_INDIRECT
             vmaDestroyBuffer(m_allocator, m_drawIndirectDataBuffer.buffer, m_drawIndirectDataBuffer.allocation);
+            vmaDestroyBuffer(m_allocator, m_finalIndirectBuffer.buffer, m_finalIndirectBuffer.allocation);
             vmaDestroyBuffer(m_allocator, m_surfaceFrustumCollisionBuffer.buffer, m_surfaceFrustumCollisionBuffer.allocation);
             vkDestroyPipeline(m_device, m_indirectCullingComputePipelineData.pipeline, nullptr);
             vkDestroyPipelineLayout(m_device, m_indirectCullingComputePipelineData.layout, nullptr);
@@ -641,10 +625,6 @@ namespace BlitzenVulkan
 
     void VulkanRenderer::CleanupBootstrapInitializedObjects()
     {
-        for(size_t i = 0; i < m_bootstrapObjects.swapchainImageViews.size(); ++i)
-        {
-            vkDestroyImageView(m_device, m_bootstrapObjects.swapchainImageViews[i], nullptr);
-        }
         vkDestroySwapchainKHR(m_device, m_bootstrapObjects.swapchain, nullptr);
 
         vkDestroyDevice(m_device, nullptr);

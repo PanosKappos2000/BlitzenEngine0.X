@@ -126,13 +126,14 @@ namespace BlitzenVulkan
     //Passed to a uniform buffer descriptor set once per frame
     struct alignas(16)SceneData
     {
+        glm::vec4 frustumData[6];
+
         glm::vec4 sunlightColor;
         glm::vec4 sunlightDirection;
         glm::vec4 ambientColor;
 
         //These will save view and clip coordinates from the camera to pass them to the shaders
         glm::mat4 viewMatrix;
-        glm::mat4 projectionMatrix;
         glm::mat4 projectionViewMatrix;
 
         //The scene data will be used to pass the vertex buffer address, this will probably need to be changed later
@@ -141,8 +142,9 @@ namespace BlitzenVulkan
         VkDeviceAddress materialConstantsBufferAddress;
         //The scene data will be used to pass the indirect draw buffer address, this will probably need to be changed later
         VkDeviceAddress indirectBufferAddress;
+        VkDeviceAddress finalIndirectBufferAddress;
         //The scene data will be used to pass the frustum collision buffer address, this will probably need to be changed later
-        VkDeviceAddress frustumCollisionBufferAddress;
+        VkDeviceAddress renderObjectBufferAddress;
     };
 
     struct MaterialPipeline
@@ -268,12 +270,9 @@ namespace BlitzenVulkan
     //Holds the commands for a specific draw call with multi draw indirect and also some per draw data
     struct alignas(16) DrawIndirectData
     {
-        //World matrix will be indexed inside the shader with gl_DrawIDARB
-        glm::mat4 worldMatrix;
-        //Material index will be indexed inside the shader with gl_DrawIDARB and will return the material constant data
-        uint32_t materialIndex;
-
+        uint32_t objectId;
         VkDrawIndexedIndirectCommand indirectDraws;
+        VkDrawMeshTasksIndirectCommandNV padding;
     };
 
     struct alignas(16) IndirectRenderObject
@@ -292,7 +291,7 @@ namespace BlitzenVulkan
 
         //If Blitzen uses indirect commands, the draw context will include an array of draw indirect data
         #if BLITZEN_START_VULKAN_WITH_INDIRECT
-            std::vector<DrawIndirectData> indirectDrawData;
+            std::vector<DrawIndirectData> indirectData;
             std::vector<IndirectRenderObject> renderObjects;
         #endif
     };

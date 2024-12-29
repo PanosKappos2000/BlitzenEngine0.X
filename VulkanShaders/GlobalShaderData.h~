@@ -1,32 +1,20 @@
 //The draw indirect buffer, is also used to pass some constant per surface data
 struct IndirectDrawData
 {
-    uint objectId;
+    uint materialIndex;
+
+    //The VkDrawIndexedIndirectCommands are not needed inside the shader, so a placeholder value is put in its place
     uint indexCount;
     uint instanceCount;
     uint firstIndex;
     uint vertexOffset;
     uint firstInstance;
-
-    uint padding[2];
 };
 
 layout(buffer_reference, std430) readonly buffer IndirectDataBuffer
 {
-    IndirectDrawData draws[];
+    IndirectDrawData indirectDraws[];
 };
-
-#ifdef COMPUTE_SHADER
-    layout(buffer_reference, std430) writeonly buffer FinalIndirectBuffer
-    {
-        IndirectDrawData draws[];
-    };
-#else
-    layout(buffer_reference, std430) readonly buffer FinalIndirectBuffer
-    {
-        IndirectDrawData draws[];
-    };
-#endif
 
 struct Vertex
 {
@@ -60,31 +48,29 @@ struct RenderObject
     vec3 center;
     float radius;
 
-    uint materialIndex;
+    uint ObjectId;
 };
 
-layout(buffer_reference, std430) readonly buffer RenderObjectBuffer
+layout(buffer_reference, std430) readonly buffer FrustumCollisionDataBuffer
 {
-    RenderObject objects[];
+    RenderObject object[];
 };
 
 layout(set = 0, binding = 0) uniform SceneData
 {
-    vec4 frustumData[6];
     vec4 sunlightColor;
     vec4 sunlightDirection;
     vec4 ambientColor;
     mat4 viewMatrix;
+    mat4 projectionMatrix;
     mat4 projectionViewMatrix;
-
     //The scene data will be used to pass the vertex buffer address, this will probably need to be changed later
     VertexBuffer vertexBuffer;
     //The scene data will be used to pass the material constants buffer address, this will probably need to be changed later
     MaterialConstantsBuffer materialConstantsBuffer;
     //The scene data will be used to pass the indirect buffer address, this will probably need to be changed later
     IndirectDataBuffer indirectDataBuffer;
-    FinalIndirectBuffer finalIndirect;
     //The scene data will be used to pass the frustum collision buffer address, this will probably need to be changed later
-    RenderObjectBuffer renderObjectBuffer;
+    FrustumCollisionDataBuffer frustCollisionDataBuffer;
 
 }sceneData;

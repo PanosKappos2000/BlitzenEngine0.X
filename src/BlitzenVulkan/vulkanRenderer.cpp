@@ -101,7 +101,7 @@ namespace BlitzenVulkan
         
         //Upload all global buffers to GPU, if indirect is acitve, it will also upload the indirect commands
         #if BLITZEN_START_VULKAN_WITH_INDIRECT
-            UploadGlobalBuffersToGPU(vertices, indices, materialConstants, m_mainDrawContext.indirectDrawData);
+            UploadGlobalBuffersToGPU(vertices, indices, materialConstants, m_mainDrawContext.indirectData);
         #else
             std::vector<DrawIndirectData> emptyIndirect;
             UploadGlobalBuffersToGPU(vertices, indices, materialConstants, emptyIndirect);
@@ -507,10 +507,8 @@ namespace BlitzenVulkan
             VkDescriptorSetLayoutBinding frustumCullingDescriptorSetLayoutBinding{};
             CreateDescriptorSetLayoutBinding(frustumCullingDescriptorSetLayoutBinding, 1, 6, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 
             VK_SHADER_STAGE_COMPUTE_BIT);
-            m_indirectCullingComputePipelineData.setLayouts.resize(2);
-            m_indirectCullingComputePipelineData.setLayouts[0] = CreateDescriptorSetLayout(m_device, 1, 
-            &frustumCullingDescriptorSetLayoutBinding);
-            m_indirectCullingComputePipelineData.setLayouts[1] = m_globalSceneDescriptorSetLayout;
+            m_indirectCullingComputePipelineData.setLayouts.resize(1);
+            m_indirectCullingComputePipelineData.setLayouts[0] = m_globalSceneDescriptorSetLayout;
 
             CreatePipelineLayout(m_device, &(m_indirectCullingComputePipelineData.layout), static_cast<uint32_t>(
             m_indirectCullingComputePipelineData.setLayouts.size()), m_indirectCullingComputePipelineData.setLayouts.data(), 
@@ -652,21 +650,30 @@ namespace BlitzenVulkan
             indirectBufferAddressInfo.buffer = m_drawIndirectDataBuffer.buffer;
             m_globalSceneData.indirectBufferAddress = vkGetBufferDeviceAddress(m_device, &indirectBufferAddressInfo);
 
+            AllocateBuffer(m_finalIndirectBuffer, indirectBufferSize, VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT |
+            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+            VMA_MEMORY_USAGE_GPU_ONLY);
+            //Store the device address of the indirect buffer, so that it can be passed to the shaders every frame
+            VkBufferDeviceAddressInfo finalIndirectAddressInfo{};
+            finalIndirectAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+            finalIndirectAddressInfo.buffer = m_finalIndirectBuffer.buffer;
+            m_globalSceneData.finalIndirectBufferAddress = vkGetBufferDeviceAddress(m_device, &finalIndirectAddressInfo);
+
             //Allocate the buffer that will hold the data used for frustum culling
-            VkDeviceSize frustumCullingDataBufferSize = sizeof(IndirectRenderObject) * m_mainDrawContext.renderObjects.size();
-            AllocateBuffer(m_surfaceFrustumCollisionBuffer, frustumCullingDataBufferSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | 
+            VkDeviceSize renderObjectBufferSize = sizeof(IndirectRenderObject) * m_mainDrawContext.renderObjects.size();
+            AllocateBuffer(m_surfaceFrustumCollisionBuffer, renderObjectBufferSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
             VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
             //Store the device address of the frustum culling buffer, so that it can be passed to the shaders every frame
-            VkBufferDeviceAddressInfo frustumDataBufferDeviceAddressInfo{};
-            frustumDataBufferDeviceAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-            frustumDataBufferDeviceAddressInfo.buffer = m_surfaceFrustumCollisionBuffer.buffer;
-            m_globalSceneData.frustumCollisionBufferAddress = vkGetBufferDeviceAddress(m_device, &frustumDataBufferDeviceAddressInfo);
+            VkBufferDeviceAddressInfo renderObjectBufferAddressInfo{};
+            renderObjectBufferAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+            renderObjectBufferAddressInfo.buffer = m_surfaceFrustumCollisionBuffer.buffer;
+            m_globalSceneData.renderObjectBufferAddress = vkGetBufferDeviceAddress(m_device, &renderObjectBufferAddressInfo);
         #endif
 
         //Allocate a staging buffer to access the buffer data and copy it to the GPU buffers
         AllocatedBuffer stagingBuffer;
         #if BLITZEN_START_VULKAN_WITH_INDIRECT
-            AllocateBuffer(stagingBuffer, vertexBufferSize + indexBufferSize + materialBufferSize + indirectBufferSize + frustumCullingDataBufferSize, 
+            AllocateBuffer(stagingBuffer, vertexBufferSize + indexBufferSize + materialBufferSize + indirectBufferSize + renderObjectBufferSize,
             VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
         #else
             AllocateBuffer(stagingBuffer, vertexBufferSize + indexBufferSize + materialBufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
@@ -683,7 +690,7 @@ namespace BlitzenVulkan
             memcpy(reinterpret_cast<char*>(allBuffersData) + static_cast<size_t>(vertexBufferSize + indexBufferSize + materialBufferSize), 
             drawIndirectCommands.data(), static_cast<size_t>(indirectBufferSize));
             memcpy(reinterpret_cast<char*>(allBuffersData) + static_cast<size_t>(vertexBufferSize + indexBufferSize + materialBufferSize + 
-            indirectBufferSize), m_mainDrawContext.renderObjects.data(), static_cast<size_t>(frustumCullingDataBufferSize));
+            indirectBufferSize), m_mainDrawContext.renderObjects.data(), static_cast<size_t>(renderObjectBufferSize));
         #endif
 
         //Start recording commands for copying the staging buffer into the GPU buffers
@@ -757,7 +764,7 @@ namespace BlitzenVulkan
             //Specify the parts of the staging buffer that will be copied and into which parts of the frustum collision buffer
             VkBufferCopy2 frustumCollisionBufferCopyRegion{};
             frustumCollisionBufferCopyRegion.sType = VK_STRUCTURE_TYPE_BUFFER_COPY_2;
-            frustumCollisionBufferCopyRegion.size = frustumCullingDataBufferSize;
+            frustumCollisionBufferCopyRegion.size = renderObjectBufferSize;
             frustumCollisionBufferCopyRegion.srcOffset = vertexBufferSize + indexBufferSize + materialBufferSize + indirectBufferSize; 
             frustumCollisionBufferCopyRegion.dstOffset = 0;
             //Specify the two source and destination buffer and the region struct from above
@@ -1282,7 +1289,6 @@ namespace BlitzenVulkan
         ---------------------------------*/
         //Setup the projection and view matrix
         m_globalSceneData.viewMatrix = context.viewMatrix;
-        m_globalSceneData.projectionMatrix = pCamera->GetProjectionMatrix();
         //Invert the projection matrix so that it matches glm and objects are not drawn upside down
         m_globalSceneData.projectionViewMatrix = pCamera->GetProjectionView();
 
@@ -1301,13 +1307,12 @@ namespace BlitzenVulkan
         /*
         Initializing frustum culling data
         */
-        glm::vec4 frustumData[6];
-        frustumData[0] = pCamera->m_projectionTranspose[3] + pCamera->m_projectionTranspose[0];
-        frustumData[1] = pCamera->m_projectionTranspose[3] - pCamera->m_projectionTranspose[0];
-        frustumData[2] = pCamera->m_projectionTranspose[3] + pCamera->m_projectionTranspose[1];
-        frustumData[3] = pCamera->m_projectionTranspose[3] - pCamera->m_projectionTranspose[1];
-        frustumData[4] = pCamera->m_projectionTranspose[3] - pCamera->m_projectionTranspose[2];
-        frustumData[5] = glm::vec4(0, 0, -1, 10000.f);
+        m_globalSceneData.frustumData[0] = pCamera->m_projectionTranspose[3] + pCamera->m_projectionTranspose[0];
+        m_globalSceneData.frustumData[1] = pCamera->m_projectionTranspose[3] - pCamera->m_projectionTranspose[0];
+        m_globalSceneData.frustumData[2] = pCamera->m_projectionTranspose[3] + pCamera->m_projectionTranspose[1];
+        m_globalSceneData.frustumData[3] = pCamera->m_projectionTranspose[3] - pCamera->m_projectionTranspose[1];
+        m_globalSceneData.frustumData[4] = pCamera->m_projectionTranspose[3] - pCamera->m_projectionTranspose[2];
+        m_globalSceneData.frustumData[5] = glm::vec4(0, 0, -1, 10000.f);
         //If indirect mode is not active frustum culling is done on the cpu
         if(!context.bDrawIndirect)
         {
@@ -1319,7 +1324,7 @@ namespace BlitzenVulkan
                     glm::vec3 center = object.modelMatrix * glm::vec4((object.center), 1.f);
                     center = m_globalSceneData.viewMatrix * glm::vec4(center, 1.f);
                     float radius = object.radius;
-                    visible = visible && (glm::dot(frustumData[i], glm::vec4(center, 1)) > -radius);
+                    visible = visible && (glm::dot(m_globalSceneData.frustumData[i], glm::vec4(center, 1)) > -radius);
                 }
                 object.bVisible = visible;
             }
@@ -1427,8 +1432,28 @@ namespace BlitzenVulkan
         -----------------------------------------------------*/
 
         #if BLITZEN_START_VULKAN_WITH_INDIRECT
+            vkCmdBindDescriptorSets(frameCommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_indirectCullingComputePipelineData.layout,
+            0, 1, &sceneDataDescriptorSet, 0, nullptr);
             vkCmdBindPipeline(frameCommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_indirectCullingComputePipelineData.pipeline);
-            //vkCmdDispatch(frameCommandBuffer, (static_cast<uint32_t>(m_mainDrawContext.indirectDrawData.size()) + 31) / 32, 1, 1);
+            vkCmdDispatch(frameCommandBuffer, (static_cast<uint32_t>(m_mainDrawContext.indirectData.size()) / 64) + 1, 1, 1);
+
+            VkMemoryBarrier2 indirectBufferReadyBarrier{};
+            indirectBufferReadyBarrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
+            indirectBufferReadyBarrier.pNext = nullptr;
+            indirectBufferReadyBarrier.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+            indirectBufferReadyBarrier.srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT;
+            indirectBufferReadyBarrier.dstStageMask = VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT;
+            indirectBufferReadyBarrier.dstAccessMask = VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT;
+            VkDependencyInfo indirectBufferReadyDependency{};
+            indirectBufferReadyDependency.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+            indirectBufferReadyDependency.pNext = nullptr;
+            indirectBufferReadyDependency.memoryBarrierCount = 1;
+            indirectBufferReadyDependency.pMemoryBarriers = &indirectBufferReadyBarrier;
+            indirectBufferReadyDependency.bufferMemoryBarrierCount = 0;
+            indirectBufferReadyDependency.pBufferMemoryBarriers = nullptr;
+            indirectBufferReadyDependency.imageMemoryBarrierCount = 0;
+            indirectBufferReadyDependency.pImageMemoryBarriers = nullptr;
+            vkCmdPipelineBarrier2(frameCommandBuffer, &indirectBufferReadyDependency);
         #endif
 
 
@@ -1532,8 +1557,8 @@ namespace BlitzenVulkan
             if(context.bDrawIndirect)
             {
                 //This is just beatiful
-                vkCmdDrawIndexedIndirect(frameCommandBuffer, m_drawIndirectDataBuffer.buffer, offsetof(DrawIndirectData, indirectDraws), 
-                static_cast<uint32_t>(m_mainDrawContext.indirectDrawData.size()), sizeof(DrawIndirectData));
+                vkCmdDrawIndexedIndirect(frameCommandBuffer, m_finalIndirectBuffer.buffer, offsetof(DrawIndirectData, indirectDraws), 
+                static_cast<uint32_t>(m_mainDrawContext.indirectData.size()), sizeof(DrawIndirectData));
             }
             //Go with the traditional method if draw indirect is inactive
             else

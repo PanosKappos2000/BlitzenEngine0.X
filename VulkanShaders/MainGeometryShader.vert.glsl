@@ -14,6 +14,7 @@ layout(location = 0) out vec3 outColor;
 layout(location = 1) out vec2 outUvMap;
 layout(location = 2) out flat uint outMaterialIndex;
 
+
 void main()
 {
     Vertex currentVertex = sceneData.vertexBuffer.vertices[gl_VertexIndex];
